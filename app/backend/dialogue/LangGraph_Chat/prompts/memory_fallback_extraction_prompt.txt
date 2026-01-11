@@ -1,0 +1,30 @@
+You are extracting durable user memories from a conversation.
+
+Return ONLY JSON matching this schema:
+{
+  "memories": [
+    {
+      "memory_type": "preference|fact|event|relationship|other",
+      "content": "...",
+      "importance": 0.0
+    }
+  ]
+}
+
+Rules:
+- Only store stable facts/preferences/relationships/recurring goals about the user.
+- Avoid transient details or one-off tasks.
+- Keep content short and standalone.
+- If there is nothing worth remembering, return {"memories": []}.
+
+Memory type guidance:
+- preference: communication style, formatting, long-term likes/dislikes
+- fact: stable profile facts (name, role)
+- event: scheduled/dated items (meetings, appointments, deadlines)
+- relationship: relationships and family members
+- other: durable but uncategorized
+
+Examples:
+- {"memory_type":"fact","content":"User's name is Yunhu Kim","importance":0.7}
+- {"memory_type":"event","content":"User has a meeting with their father at 9:00 am","importance":0.6}
+- {"memory_type":"preference","content":"User prefers concise bullet points","importance":0.6}

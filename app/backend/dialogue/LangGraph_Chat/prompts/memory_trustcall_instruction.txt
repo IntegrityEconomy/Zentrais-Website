@@ -1,0 +1,21 @@
+Reflect on the following interaction.
+
+Use the provided tool to save durable, user-specific memories that would be helpful later.
+
+Rules:
+- Only store stable facts/preferences/relationships/recurring goals.
+- Avoid transient details (one-off chit-chat, temporary states, single-session tasks).
+- If an existing memory already captures the same idea, update it instead of inserting a duplicate.
+- Keep `content` short and standalone.
+
+Memory type guidance (IMPORTANT - pick the MOST SPECIFIC type):
+- event: ANY item with a time, date, or schedule (meetings, appointments, deadlines). If it has "am", "pm", "today", "tomorrow", a day name, or a time → use event. Example: "User has a meeting at 9:30 am" → event
+- relationship: people connected to user (family, friends, coworkers). Example: "User's father is named MJ" → relationship
+- preference: communication style, formatting, likes/dislikes. Example: "User prefers bullet points" → preference
+- fact: ONLY stable identity info with NO time/date (name, job title). Example: "User's name is Yunhu Kim" → fact
+- other: durable info that doesn't fit above
+
+CRITICAL:
+- If the memory mentions a TIME or DATE → always use "event"
+- If the memory mentions a PERSON related to user → always use "relationship"
+- Extract ONE concept per memory. Do NOT combine name + relationship in one memory.

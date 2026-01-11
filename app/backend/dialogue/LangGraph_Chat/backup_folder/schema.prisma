@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") 
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+}
+
+model User {
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String
+  messagesSent     Message[] @relation("MessageSender")
+  messagesReceived Message[] @relation("MessageReceiver")
+  // memories  Memory[]
+  // interests String[]  @default([])
+  createdAt DateTime  @default(now())
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String?
+  type      MessageType @default(TEXT)
+  mediaUrl   String?
+  createdAt  DateTime @default(now())
+  sender     User     @relation("MessageSender", fields: [senderId], references: [id])
+  receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id])
+}
+
+// Long-term memory for contextual conversations
+// model Memory {
+//  id          String   @id @default(cuid())
+//  userId      String
+//  user        User     @relation(fields: [userId], references: [id])
+//  content     String   // The memory content/summary
+//  memoryType  String   // "fact", "preference", "event", "relationship"
+//  importance  Float    @default(0.5)
+//  metadata    Json?
+//  createdAt   DateTime @default(now())
+  
+//  @@index([userId, memoryType])
+// }
