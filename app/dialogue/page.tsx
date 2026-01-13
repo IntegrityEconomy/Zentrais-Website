@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { io, Socket } from 'socket.io-client';
 import { Search, Edit, ArrowLeft, Send, Bot, X } from 'lucide-react';
 import { BottomNav } from '@/components/app/BottomNav';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { getStoredToken, getStoredUserId } from '@/lib/auth';
+import { DIALOGUE_BACKEND_URL } from '@/lib/config';
 
 interface Message {
   id: string;
@@ -37,20 +40,108 @@ export default function DialoguePage() {
   const [loading, setLoading] = useState(true);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [newUserId, setNewUserId] = useState('');
+  
+  // Socket.IO connection
+  const socketRef = useRef<Socket | null>(null);
+  const currentUserId = getStoredUserId();
 
-  useEffect(() => {
-    loadConversations();
+  // Helper to get auth headers
+  const getAuthHeaders = useCallback(() => {
+    const token = getStoredToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    };
   }, []);
 
+  // Initialize Socket.IO connection
   useEffect(() => {
-    if (selectedConversation) {
-      loadMessages(selectedConversation);
+    const token = getStoredToken();
+    if (!token) {
+      router.push('/login');
+      return;
     }
-  }, [selectedConversation]);
 
-  const loadConversations = async () => {
+    // Connect to WebSocket server
+    const socket = io(DIALOGUE_BACKEND_URL, {
+      auth: { token },
+      transports: ['websocket'],
+    });
+
+    socket.on('connect', () => {
+      console.log('WebSocket connected');
+    });
+
+    socket.on('receive_message', (message) => {
+      console.log('Received message:', message);
+      // Transform backend message format to frontend format
+      const newMessage: Message = {
+        id: message.id,
+        text: message.content || '',
+        sender: message.senderId === currentUserId ? 'user' : 'other',
+        senderName: message.senderId === currentUserId ? 'You' : message.senderId,
+        timestamp: message.createdAt || new Date().toISOString(),
+      };
+      
+      setMessages((prev) => {
+        // Avoid duplicates
+        if (prev.some(m => m.id === newMessage.id)) return prev;
+        return [...prev, newMessage];
+      });
+
+      // Update conversation list with last message
+      setConversations((prev) => {
+        const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
+        const existing = prev.find(c => c.id === otherUserId);
+        if (existing) {
+          return prev.map(c => 
+            c.id === otherUserId 
+              ? { ...c, lastMessage: message.content || '', timestamp: message.createdAt }
+              : c
+          );
+        } else {
+          // New conversation from incoming message
+          return [{
+            id: otherUserId,
+            name: otherUserId,
+            lastMessage: message.content || '',
+            timestamp: message.createdAt || new Date().toISOString(),
+            unread: 1,
+            status: 'away' as const,
+          }, ...prev];
+        }
+      });
+    });
+
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+    });
+
+    socketRef.current = socket;
+
+    // Load conversations
+    loadConversations();
+
+    // Cleanup on unmount
+    return () => {
+      socket.disconnect();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadConversations = useCallback(async () => {
     try {
-      const response = await fetch('/api/dialogue/conversations');
+      const response = await fetch('/api/dialogue/conversations', {
+        headers: getAuthHeaders(),
+      });
+      if (response.status === 401) {
+        router.push('/login');
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setConversations(data.conversations || []);
@@ -60,11 +151,13 @@ export default function DialoguePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders, router]);
 
-  const loadMessages = async (conversationId: string) => {
+  const loadMessages = useCallback(async (conversationId: string) => {
     try {
-      const response = await fetch(`/api/dialogue/conversations/${conversationId}/messages`);
+      const response = await fetch(`/api/dialogue/conversations/${conversationId}/messages`, {
+        headers: getAuthHeaders(),
+      });
       if (response.ok) {
         const data = await response.json();
         setMessages(data.messages || []);
@@ -72,85 +165,82 @@ export default function DialoguePage() {
     } catch (error) {
       console.error('Error loading messages:', error);
     }
-  };
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      loadMessages(selectedConversation);
+    }
+  }, [selectedConversation, loadMessages]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedConversation) return;
-
-    const newMessage: Message = {
-      id: `msg_${Date.now()}`,
-      text: messageText,
-      sender: 'user',
-      senderName: 'You',
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
-    setMessageText('');
-
-    // Send to backend
-    try {
-      await fetch(`/api/dialogue/conversations/${selectedConversation}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: messageText }),
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
+    if (!socketRef.current?.connected) {
+      console.error('WebSocket not connected');
+      return;
     }
+
+    // Send message via WebSocket
+    socketRef.current.emit('send_message', {
+      receiverId: selectedConversation,
+      content: messageText,
+      type: 'TEXT',
+      mediaUrl: '',
+    });
+
+    setMessageText('');
   };
+
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const handleStartNewConversation = async () => {
     if (!newUserId.trim()) return;
 
-    // Create or find conversation with the user ID
-    try {
-      const response = await fetch('/api/dialogue/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: newUserId.trim() }),
-      });
+    const recipientId = newUserId.trim();
+    setVerifyError(null);
+    
+    // Check if we already have a conversation with this user
+    const existingConversation = conversations.find(c => c.id === recipientId);
+    if (existingConversation) {
+      setSelectedConversation(existingConversation.id);
+      setNewUserId('');
+      setShowNewConversation(false);
+      return;
+    }
 
-      if (response.ok) {
-        const data = await response.json();
-        const conversationId = data.conversation?.id || `new_${newUserId.trim()}`;
-        
-        // Add to conversations list if it's a new one
-        if (data.conversation && !conversations.find(c => c.id === data.conversation.id)) {
-          setConversations(prev => [data.conversation, ...prev]);
-        }
-        
-        setSelectedConversation(conversationId);
-      } else {
-        // Fallback: create a temporary conversation and navigate
-        const tempConversation: Conversation = {
-          id: `temp_${Date.now()}`,
-          name: newUserId.trim(),
-          lastMessage: '',
-          timestamp: new Date().toISOString(),
-          unread: 0,
-          status: 'away',
-        };
-        setConversations(prev => [tempConversation, ...prev]);
-        setSelectedConversation(tempConversation.id);
+    // Verify the user exists in the database
+    setVerifying(true);
+    try {
+      const response = await fetch(`/api/user/${recipientId}`);
+      const data = await response.json();
+      
+      if (!response.ok || !data.exists) {
+        setVerifyError('User not found. Please check the User ID.');
+        setVerifying(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-      // Fallback: create a temporary conversation locally
-      const tempConversation: Conversation = {
-        id: `temp_${Date.now()}`,
-        name: newUserId.trim(),
+
+      // Create a new conversation with the verified user
+      const newConversation: Conversation = {
+        id: recipientId,
+        name: data.username || recipientId,
         lastMessage: '',
         timestamp: new Date().toISOString(),
         unread: 0,
         status: 'away',
       };
-      setConversations(prev => [tempConversation, ...prev]);
-      setSelectedConversation(tempConversation.id);
+      
+      setConversations(prev => [newConversation, ...prev]);
+      setSelectedConversation(recipientId);
+      setNewUserId('');
+      setShowNewConversation(false);
+    } catch (error) {
+      console.error('Error verifying user:', error);
+      setVerifyError('Could not verify user. Please try again.');
+    } finally {
+      setVerifying(false);
     }
-
-    setNewUserId('');
-    setShowNewConversation(false);
   };
 
   const formatTime = (dateString: string) => {
@@ -383,6 +473,7 @@ export default function DialoguePage() {
                   onClick={() => {
                     setShowNewConversation(false);
                     setNewUserId('');
+                    setVerifyError(null);
                   }}
                   className="p-1 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
                 >
@@ -394,16 +485,24 @@ export default function DialoguePage() {
               </p>
               <Input
                 value={newUserId}
-                onChange={(e) => setNewUserId(e.target.value)}
-                placeholder="Enter user ID"
-                className="mb-4"
+                onChange={(e) => {
+                  setNewUserId(e.target.value);
+                  setVerifyError(null);
+                }}
+                placeholder="Enter user ID (e.g., cm5abc123...)"
+                className={`mb-2 ${verifyError ? 'border-red-500' : ''}`}
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !verifying) {
                     handleStartNewConversation();
                   }
                 }}
                 autoFocus
+                disabled={verifying}
               />
+              {verifyError && (
+                <p className="text-sm text-red-500 mb-4">{verifyError}</p>
+              )}
+              {!verifyError && <div className="mb-2" />}
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -411,16 +510,18 @@ export default function DialoguePage() {
                   onClick={() => {
                     setShowNewConversation(false);
                     setNewUserId('');
+                    setVerifyError(null);
                   }}
+                  disabled={verifying}
                 >
                   Cancel
                 </Button>
                 <Button
                   className="flex-1 bg-green-500 hover:bg-green-600 text-white"
                   onClick={handleStartNewConversation}
-                  disabled={!newUserId.trim()}
+                  disabled={!newUserId.trim() || verifying}
                 >
-                  Start Chat
+                  {verifying ? 'Verifying...' : 'Start Chat'}
                 </Button>
               </div>
             </div>

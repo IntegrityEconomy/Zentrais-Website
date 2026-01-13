@@ -1,22 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock user database - in production, this would be a real database
-const users = [
-  {
-    id: '1',
-    email: 'john@example.com',
-    password: 'password123', // In production, this would be hashed
-    name: 'John Doe',
-    avatar: '/user-image-1.png',
-  },
-  {
-    id: '2',
-    email: 'jane@example.com',
-    password: 'password123',
-    name: 'Jane Smith',
-    avatar: '/user-image-2.png',
-  },
-];
+import { DIALOGUE_BACKEND_URL } from '@/lib/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,34 +12,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
-    const user = users.find((u) => u.email === email && u.password === password);
+    // Call the backend dialogue service
+    const response = await fetch(`${DIALOGUE_BACKEND_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (!user) {
+    const data = await response.json();
+
+    if (!response.ok) {
       return NextResponse.json(
-        { message: 'Invalid email or password' },
-        { status: 401 }
+        { message: data.message || 'Invalid email or password' },
+        { status: response.status }
       );
     }
 
-    // In production, generate a proper JWT token
-    const token = `mock_token_${user.id}_${Date.now()}`;
-
     return NextResponse.json({
-      token,
+      token: data.token,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
+        id: data.user?.id || data.userId,
+        email: email,
       },
       rememberMe,
     });
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
+      { message: 'Unable to connect to authentication service' },
+      { status: 503 }
     );
   }
 }

@@ -8,6 +8,13 @@ const prisma = new PrismaClient();
 export class MessageService {
   constructor(private readonly uploadService: UploadService) {}
 
+  async getUserById(userId: string) {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, email: true },
+    });
+  }
+
   async getUserMessages(userId: string) {
     // Fetch messages from database
     const messages = await prisma.message.findMany({

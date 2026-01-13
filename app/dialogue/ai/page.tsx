@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getStoredToken } from '@/lib/auth';
 
 interface Message {
   id: string;
@@ -22,9 +23,16 @@ export default function AIPage() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const token = getStoredToken();
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
     // Initial greeting
     setMessages([
       {
@@ -34,7 +42,7 @@ export default function AIPage() {
         timestamp: new Date().toISOString(),
       },
     ]);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,6 +50,12 @@ export default function AIPage() {
 
   const handleSend = async () => {
     if (!inputText.trim() || loading) return;
+
+    const token = getStoredToken();
+    if (!token) {
+      router.push('/login');
+      return;
+    }
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -58,24 +72,39 @@ export default function AIPage() {
     try {
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: currentInput }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: currentInput, ...(threadId ? { threadId } : {}) }),
       });
 
       if (response.ok) {
         const data = await response.json();
+
+        if (data?.threadId && typeof data.threadId === 'string') {
+          setThreadId(data.threadId);
+        }
+
         const aiMessage: Message = {
           id: `ai_${Date.now()}`,
-          text: data.response,
+          text: data.response || 'No response received.',
           sender: 'ai',
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMessage]);
       } else {
-        // Fallback response
+        let errorMsg = 'AI request failed.';
+        try {
+          const err = await response.json();
+          errorMsg = err?.message || err?.detail || errorMsg;
+        } catch {
+          // ignore
+        }
+
         const aiMessage: Message = {
           id: `ai_${Date.now()}`,
-          text: 'I understand your question. Let me help you with that.',
+          text: errorMsg,
           sender: 'ai',
           timestamp: new Date().toISOString(),
         };
@@ -139,7 +168,12 @@ export default function AIPage() {
               <p className="font-semibold text-gray-900 text-sm">Zentrale AI V.1.</p>
             </div>
           </div>
-          <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+          <button
+            type="button"
+            aria-label="Go to Dialogue"
+            onClick={() => router.push('/dialogue')}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+          >
             <MessageSquare className="w-5 h-5" />
           </button>
         </div>

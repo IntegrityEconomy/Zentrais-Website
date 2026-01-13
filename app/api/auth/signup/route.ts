@@ -1,21 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Mock user database - in production, this would be a real database
-let users: Array<{
-  id: string;
-  email: string;
-  password: string;
-  name: string;
-  avatar?: string;
-}> = [
-  {
-    id: '1',
-    email: 'john@example.com',
-    password: 'password123',
-    name: 'John Doe',
-    avatar: '/user-image-1.png',
-  },
-];
+import { DIALOGUE_BACKEND_URL } from '@/lib/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,42 +19,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
-    const existingUser = users.find((u) => u.email === email);
-    if (existingUser) {
+    // Call the backend dialogue service
+    const response = await fetch(`${DIALOGUE_BACKEND_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        password,
+        username: fullName.replace(/\s+/g, '_').toLowerCase(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
       return NextResponse.json(
-        { message: 'User with this email already exists' },
-        { status: 409 }
+        { message: data.message || 'Registration failed' },
+        { status: response.status }
       );
     }
 
-    // Create new user
-    const newUser = {
-      id: `user_${Date.now()}`,
-      email,
-      password, // In production, this would be hashed
-      name: fullName,
-    };
-
-    users.push(newUser);
-
-    // In production, generate a proper JWT token
-    const token = `mock_token_${newUser.id}_${Date.now()}`;
-
     return NextResponse.json({
-      token,
+      token: data.token,
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        avatar: newUser.avatar,
+        id: data.user.id,
+        email: data.user.email,
+        name: fullName,
       },
     }, { status: 201 });
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
+      { message: 'Unable to connect to authentication service' },
+      { status: 503 }
     );
   }
 }
