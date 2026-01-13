@@ -1,0 +1,28 @@
+{
+  "TableName": "zentrais-votes",
+  "KeySchema": [
+    {
+      "AttributeName": "entityId",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "userId",
+      "KeyType": "RANGE"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "entityId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "userId",
+      "AttributeType": "S"
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+}
+

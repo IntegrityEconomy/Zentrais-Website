@@ -1,7 +1,4 @@
 import "./globals.css";
-import Navbar from "../components/navbar";
-import LanguageProviderWrapper from "../components/language-provider-wrapper";
-import FloatingCTA from "../components/floating-cta";
 import { Space_Grotesk, Playfair_Display, Inter } from "next/font/google";
 
 const spaceGrotesk = Space_Grotesk({
@@ -28,7 +25,7 @@ const inter = Inter({
 
 export const metadata = {
   title: "Zentrais",
-  description: "More than a social network!",
+  description: "Zentrais – Perspectives, Dialog, and Exchange built on integrity.",
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
@@ -43,30 +40,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-QW0W2XQB7Y"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-QW0W2XQB7Y');
-            `,
-          }}
-        />
-      </head>
-      <body className={`min-h-screen flex flex-col ${spaceGrotesk.variable} ${playfairDisplay.variable} ${inter.variable}`} style={{ backgroundColor: 'transparent' }}>
-        <LanguageProviderWrapper>
-          {/* NAVBAR */}
-          <Navbar />
-
-          {/* CONTENIDO PRINCIPAL */}
-          <main className="flex-grow">{children}</main>
-
-          {/* FLOATING CTA */}
-          <FloatingCTA />
-        </LanguageProviderWrapper>
+      <body
+        className={`min-h-screen flex flex-col bg-black text-foreground ${spaceGrotesk.variable} ${playfairDisplay.variable} ${inter.variable}`}
+      >
+        <main className="flex-1 flex flex-col">{children}</main>
       </body>
     </html>
   );

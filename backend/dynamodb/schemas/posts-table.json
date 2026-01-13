@@ -1,0 +1,54 @@
+{
+  "TableName": "zentrais-posts",
+  "KeySchema": [
+    {
+      "AttributeName": "threadId",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "postId",
+      "KeyType": "RANGE"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "threadId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "postId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "createdAt",
+      "AttributeType": "S"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "createdAt-index",
+      "KeySchema": [
+        {
+          "AttributeName": "threadId",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      },
+      "ProvisionedThroughput": {
+        "ReadCapacityUnits": 5,
+        "WriteCapacityUnits": 5
+      }
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+}
+

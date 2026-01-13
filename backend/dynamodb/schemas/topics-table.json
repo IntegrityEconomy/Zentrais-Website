@@ -1,0 +1,42 @@
+{
+  "TableName": "zentrais-topics",
+  "KeySchema": [
+    {
+      "AttributeName": "topicId",
+      "KeyType": "HASH"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "topicId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "createdAt",
+      "AttributeType": "S"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "createdAt-index",
+      "KeySchema": [
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      },
+      "ProvisionedThroughput": {
+        "ReadCapacityUnits": 5,
+        "WriteCapacityUnits": 5
+      }
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+}
+
