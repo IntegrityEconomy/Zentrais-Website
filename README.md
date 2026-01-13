@@ -2,6 +2,17 @@ This folder is extended from the Dinal/debate repo
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Add .env file
+
+Please add .env file in the root directoy as follow
+
+```plain
+# NEXT_PUBLIC_ is for client.
+# Server-side can use either.
+DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
+NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
+```
+
 ## Getting Started
 
 First, run the development server:
