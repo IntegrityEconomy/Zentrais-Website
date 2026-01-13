@@ -1,0 +1,29 @@
+{
+  "cluster": "chat-engine-cluster",
+  "launchType": "FARGATE",
+  "taskDefinition": "task-definition-chat-api:3",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-07c3ad47857d067d4",
+        "subnet-0e0fae6f5ce75b665"
+      ],
+      "securityGroups": [
+        "sg-06f1725e460087997"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "overrides": {
+    "containerOverrides": [
+      {
+        "name": "chat-api",
+        "command": [
+          "node",
+          "-e",
+          "const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); const isSafe=(n)=>/^[A-Za-z0-9_]+$/.test(n); (async()=>{ const tables = await prisma.$queryRaw`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`; console.log('Tables in public schema:', tables.map(t=>t.tablename).join(', ')); for (const t of tables){ const name=t.tablename; if(!isSafe(name)){ console.log('SKIP unsafe table name:', name); continue; } const countRows = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS count FROM \"public\".\"${name}\"`); const count = (countRows && countRows[0] && countRows[0].count) ?? null; console.log(`${name}: ${count}`); } await prisma.$disconnect(); })().catch(async(e)=>{ console.error(e); try{ await prisma.$disconnect(); }catch{} process.exit(1); });"
+        ]
+      }
+    ]
+  }
+}

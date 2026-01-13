@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Zentrais Chat Demo</title>
+  </head>
+  <body>
+    <h3>Zentrais Chat Demo</h3>
+
+    <label>
+      API Base URL
+      <input
+        id="apiBase"
+        placeholder="https://chat-engine-team-production.up.railway.app"
+        style="width: 420px"
+      />
+    </label>
+    <br /><br />
+
+    <label>
+      Email
+      <input id="email" placeholder="alice@example.com" type="email" />
+    </label>
+    <br />
+    <label>
+      Password
+      <input id="password" type="password" placeholder="••••••" />
+    </label>
+    <br />
+
+    <button onclick="registerUser()">Register &amp; Get Token</button>
+    <button onclick="loginUser()">Login &amp; Get Token</button>
+    <label style="margin-left: 12px; font-size: 0.9rem">
+      <input id="autoConnect" type="checkbox" checked /> connect after token
+    </label>
+    <br /><br />
+
+    <input id="token" placeholder="JWT token" style="width: 420px" /><br />
+    <button onclick="connectSocket()">Connect</button><br /><br />
+
+    <input id="receiver" placeholder="Receiver User ID" /><br />
+    <input id="content" placeholder="Message" /><br />
+    <button onclick="send()">Send Text</button><br /><br />
+
+    <hr />
+    <h4>AI Agent (LangGraph)</h4>
+    <label>
+      Logged-in User ID
+      <input id="aiLoggedInUserId" placeholder="(from JWT)" style="width: 320px" readonly />
+    </label>
+    <br />
+    <label>
+      Thread
+      <select id="aiThreadSelect" style="width: 420px"></select>
+    </label>
+    <button onclick="refreshAiThreads()">Refresh</button>
+    <button onclick="loadAiThread()">Load</button>
+    <button onclick="newAiThread()">New Thread</button>
+    <br />
+    <input id="aiMessage" placeholder="Ask the AI agent..." style="width: 420px" />
+    <button onclick="sendAi()">Send to AI</button>
+    <button onclick="resetAiSession()">Reset Session</button>
+    <button onclick="clearAiChat()">Clear Log</button>
+    <br /><br />
+
+    <div
+      id="aiOutput"
+      style="border: 1px solid #ddd; padding: 10px; width: 680px; max-width: 95vw"
+    ></div>
+
+    <hr />
+    <h4>Send Media</h4>
+    <input type="file" id="mediaFile" accept="image/*,audio/*" />
+    <br />
+    <button onclick="sendMedia()">Upload & Send Media</button>
+    <br /><br />
+
+    <hr />
+    <h4>Voice Recording</h4>
+    <div id="recordingControls">
+      <button id="startRecordBtn" onclick="startRecording()">🎤 Start Recording</button>
+      <button id="stopRecordBtn" onclick="stopRecording()" disabled>⏹️ Stop Recording</button>
+      <span id="recordingStatus" style="margin-left: 10px; color: gray;"></span>
+    </div>
+    <div id="recordingTimer" style="margin-top: 5px; font-family: monospace; display: none;">
+      Recording: <span id="timerDisplay">00:00</span>
+    </div>
+    <div id="recordingPreview" style="margin-top: 10px; display: none;">
+      <audio id="recordedAudio" controls></audio>
+      <br />
+      <button onclick="sendRecordedAudio()">📤 Send Recording</button>
+      <button onclick="discardRecording()">🗑️ Discard</button>
+    </div>
+    <br />
+
+    <div id="log" style="white-space: pre-wrap; font-family: monospace"></div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script>
+      let socket;
+      let isConnected = false;
+      const log = document.getElementById("log");
+      const tokenInput = document.getElementById("token");
+      const apiBaseInput = document.getElementById("apiBase");
+      const savedToken = localStorage.getItem("chat-demo-token");
+      const savedBase = localStorage.getItem("chat-demo-api-base");
+      if (savedToken) {
+        tokenInput.value = savedToken;
+      }
+      if (savedBase) {
+        apiBaseInput.value = savedBase;
+      } else {
+        apiBaseInput.value = "https://chat-engine-team-production.up.railway.app";  // default base URL
+      }
+      let registeredUser = null;
+
+      // Voice recording variables
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let recordedBlob = null;
+      let recordingStartTime = null;
+      let timerInterval = null;
+
+      const aiChatLog = [];
+      const aiOutput = document.getElementById("aiOutput");
+
+      function getApiBase() {
+        const raw = apiBaseInput.value.trim();
+        if (!raw) {
+          throw new Error("Enter API base URL");
+        }
+        const normalized = raw.endsWith("/") ? raw.slice(0, -1) : raw;
+        localStorage.setItem("chat-demo-api-base", normalized);
+        return normalized;
+      }
+
+      async function registerUser() {
+        await issueToken("register");
+      }
+
+      async function loginUser() {
+        await issueToken("login");
+      }
+
+      async function issueToken(mode) {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        if (!email || !password) {
+          logMessage("⚠️ Enter email & password first");
+          return;
+        }
+        try {
+          const base = getApiBase();
+          logMessage(`⏳ ${mode}...`);
+          const res = await fetch(`${base}/auth/${mode}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email, password }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(payload.message || res.statusText);
+          }
+          if (!payload.token) {
+            throw new Error("Token missing in response");
+          }
+          tokenInput.value = payload.token;
+          localStorage.setItem("chat-demo-token", payload.token);
+          logMessage(`🟢 Token issued for ${email}`);
+          // Set chat identity from JWT (server does not emit an 'authenticated' event)
+          try {
+            const p = decodeJwtPayload(payload.token);
+            registeredUser = p?.userId ? String(p.userId) : null;
+          } catch {
+            registeredUser = null;
+          }
+          updateAiIdentityFromToken();
+          refreshAiThreads();
+          if (document.getElementById("autoConnect").checked) {
+            connectSocket();
+          }
+        } catch (err) {
+          logMessage(`❌ ${mode} failed: ${err.message}`);
+        }
+      }
+
+      function escapeHtml(text) {
+        return String(text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function renderMarkdownSafe(mdText) {
+        const raw = String(mdText || "");
+        if (window.marked && window.DOMPurify) {
+          const html = window.marked.parse(raw);
+          return window.DOMPurify.sanitize(html, {
+            USE_PROFILES: { html: true },
+          });
+        }
+        return `<pre style="white-space: pre-wrap; margin: 0">${escapeHtml(raw)}</pre>`;
+      }
+
+      function appendAiMessage(role, content, emotion) {
+        const row = document.createElement("div");
+        row.style.margin = "6px 0";
+        row.style.padding = "8px";
+        row.style.borderRadius = "6px";
+        row.style.background = role === "assistant" ? "#f7f7f7" : "#eef6ff";
+
+        const header = document.createElement("div");
+        header.style.fontWeight = "600";
+        header.style.marginBottom = "4px";
+
+        if (role === "assistant") {
+          const label = emotion?.label ? ` [${emotion.label}${emotion.score ? ` ${emotion.score}/5` : ""}]` : "";
+          header.textContent = `AI${label}`;
+        } else {
+          header.textContent = "You";
+        }
+
+        const body = document.createElement("div");
+        body.innerHTML = role === "assistant" ? renderMarkdownSafe(content) : `<div>${escapeHtml(content)}</div>`;
+
+        row.appendChild(header);
+        row.appendChild(body);
+        aiOutput.appendChild(row);
+        aiOutput.scrollTop = aiOutput.scrollHeight;
+      }
+
+      function getTokenOrThrow() {
+        const token = document.getElementById("token").value.trim();
+        if (!token) {
+          throw new Error("Missing JWT token. Please login/register first.");
+        }
+        localStorage.setItem("chat-demo-token", token);
+        return token;
+      }
+
+      function decodeJwtPayload(token) {
+        const parts = (token || "").split(".");
+        if (parts.length !== 3) return null;
+        try {
+          const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const json = decodeURIComponent(
+            atob(b64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          return JSON.parse(json);
+        } catch {
+          return null;
+        }
+      }
+
+      function updateAiIdentityFromToken() {
+        const token = document.getElementById("token").value.trim();
+        const el = document.getElementById("aiLoggedInUserId");
+        const payload = decodeJwtPayload(token);
+        const userId = (payload && payload.userId ? String(payload.userId) : "").trim();
+        el.value = userId;
+      }
+
+      function getSelectedAiThreadId() {
+        const sel = document.getElementById("aiThreadSelect");
+        const v = (sel && sel.value ? sel.value : "").trim();
+        return v || null;
+      }
+
+      function setSelectedAiThreadId(threadId) {
+        const sel = document.getElementById("aiThreadSelect");
+        if (!sel) return;
+        sel.value = threadId || "";
+        if (threadId) {
+          localStorage.setItem("chat-demo-ai-thread", threadId);
+        } else {
+          localStorage.removeItem("chat-demo-ai-thread");
+        }
+      }
+
+      async function refreshAiThreads() {
+        try {
+          const base = getApiBase();
+          const token = getTokenOrThrow();
+          updateAiIdentityFromToken();
+
+          const res = await fetch(`${base}/ai/threads`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || payload.ok === false) {
+            throw new Error(payload.message || res.statusText);
+          }
+
+          const threads = Array.isArray(payload.threads) ? payload.threads : [];
+          const sel = document.getElementById("aiThreadSelect");
+
+          const previous =
+            getSelectedAiThreadId() || localStorage.getItem("chat-demo-ai-thread") || "";
+
+          sel.innerHTML = "";
+          const optNew = document.createElement("option");
+          optNew.value = "";
+          optNew.textContent = "(new thread)";
+          sel.appendChild(optNew);
+
+          for (const t of threads) {
+            const opt = document.createElement("option");
+            opt.value = t.id;
+            const shortId = String(t.id || "").slice(0, 8);
+            const updated = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
+            opt.textContent = updated ? `${shortId} — ${updated}` : shortId;
+            sel.appendChild(opt);
+          }
+
+          if (previous) {
+            setSelectedAiThreadId(previous);
+          }
+        } catch (err) {
+          logMessage(`❌ Thread refresh failed: ${err.message}`);
+        }
+      }
+
+      async function loadAiThread() {
+        try {
+          const base = getApiBase();
+          const token = getTokenOrThrow();
+          const threadId = getSelectedAiThreadId();
+          if (!threadId) {
+            logMessage("⚠️ Select a thread first (or start a new one)");
+            return;
+          }
+
+          const res = await fetch(`${base}/ai/threads/${threadId}`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || payload.ok === false) {
+            throw new Error(payload.message || res.statusText);
+          }
+
+          clearAiChat();
+          const messages = payload?.thread?.messages || [];
+          logMessage(`🧵 Loaded thread ${threadId} (${messages.length} messages)`);
+          for (const m of messages) {
+            const role = (m.role || "").toString().toLowerCase();
+            const content = (m.content || "").toString();
+            if (role === "assistant") {
+              const label = m.emotionLabel ? ` [${m.emotionLabel}]` : "";
+              logMessage(`AI${label}: ${content}`);
+            } else {
+              logMessage(`You: ${content}`);
+            }
+          }
+        } catch (err) {
+          logMessage(`❌ Load thread failed: ${err.message}`);
+        }
+      }
+
+      function newAiThread() {
+        setSelectedAiThreadId("");
+        clearAiChat();
+        logMessage("🧵 New AI thread selected");
+      }
+
+      async function sendAi() {
+        try {
+          const base = getApiBase();
+          const message = document.getElementById("aiMessage").value.trim();
+          const token = getTokenOrThrow();
+          updateAiIdentityFromToken();
+          const threadId = getSelectedAiThreadId();
+
+          if (!message) {
+            logMessage("⚠️ Enter an AI message");
+            return;
+          }
+
+          aiChatLog.push({ role: "user", content: message });
+          appendAiMessage("user", message);
+          document.getElementById("aiMessage").value = "";
+
+          logMessage("⏳ AI thinking...");
+          const res = await fetch(`${base}/ai/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              message,
+              threadId: threadId || undefined,
+            }),
+          });
+
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || payload.ok === false) {
+            const msg =
+              payload.error ||
+              (Array.isArray(payload.message) ? payload.message.join("; ") : payload.message) ||
+              res.statusText;
+            throw new Error(msg);
+          }
+
+          const reply = (payload.response || "").trim();
+          const emotion = payload.emotion || {};
+          if (payload.threadId) {
+            setSelectedAiThreadId(payload.threadId);
+          }
+          aiChatLog.push({ role: "assistant", content: reply, emotion });
+
+          appendAiMessage("assistant", reply, emotion);
+        } catch (err) {
+          logMessage(`❌ AI failed: ${err.message}`);
+        }
+      }
+
+      async function resetAiSession() {
+        try {
+          const base = getApiBase();
+          const token = getTokenOrThrow();
+          const threadId = getSelectedAiThreadId();
+          const res = await fetch(`${base}/ai/reset`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ threadId: threadId || undefined }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(payload.message || res.statusText);
+          }
+          logMessage(`🔄 ${payload.message || "Session reset"}`);
+        } catch (err) {
+          logMessage(`❌ Reset failed: ${err.message}`);
+        }
+      }
+
+      function clearAiChat() {
+        aiChatLog.length = 0;
+        aiOutput.innerHTML = "";
+        logMessage("🧹 AI chat cleared");
+      }
+
+      function connectSocket() {
+        const token = document.getElementById("token").value.trim();
+        if (!token) {
+          logMessage("⚠️ Enter JWT token!");
+          return;
+        }
+
+        // Set chat identity from JWT (server does not emit an 'authenticated' event)
+        try {
+          const payload = decodeJwtPayload(token);
+          registeredUser = payload?.userId ? String(payload.userId) : null;
+          if (registeredUser) {
+            logMessage(`🟢 Using token userId: ${registeredUser}`);
+          }
+        } catch {
+          registeredUser = null;
+        }
+
+        localStorage.setItem("chat-demo-token", token);
+        if (socket) {
+          socket.disconnect();
+        }
+
+        // Connect to your WebSocket server
+        socket = io(getApiBase(), {
+          transports: ["websocket"],
+          auth: {
+            token,
+          },
+        });
+
+        wireSocketEvents();
+      }
+
+      window.addEventListener("load", () => {
+        try {
+          updateAiIdentityFromToken();
+          if (tokenInput.value.trim()) {
+            refreshAiThreads();
+          }
+        } catch {
+          // ignore
+        }
+      });
+
+      function wireSocketEvents() {
+        socket.on("connect", () => {
+          isConnected = true;
+          logMessage("✅ Connected to server!");
+        });
+        socket.on("disconnect", () => {
+          isConnected = false;
+          logMessage("⚠️ Disconnected");
+        });
+        socket.on("connect_error", (err) => {
+          isConnected = false;
+          logMessage(`❌ Connection error: ${err.message}`);
+        });
+        socket.on("authenticated", ({ userId, message }) => {
+          registeredUser = userId;
+          logMessage(`🟩 ${message || `Signed in as ${userId}`}`);
+        });
+        socket.on("auth_error", (msg) => {
+          logMessage(`❌ Auth error: ${msg}`);
+        });
+        // Listen for incoming messages
+        socket.on("receive_message", (msg) => {
+          const senderName = msg.senderUsername || msg.sender?.username || msg.senderId;
+          if (msg.type === "IMAGE") {
+            logMedia(`${senderName}:`, `<img src="${msg.mediaUrl}" width="200" />`);
+          } else if (msg.type === "AUDIO") {
+            logMedia(`${senderName}:`, `<audio controls src="${msg.mediaUrl}"></audio>`);
+          } else {
+            logMessage(`${senderName}: ${msg.content}`);
+          }
+        });
+      }
+
+      // Send message to server
+      function send() {
+        if (!socket || !isConnected) {
+          logMessage("⚠️ Connect with a JWT first!");
+          return;
+        }
+        if (!registeredUser) {
+          logMessage("⚠️ Could not determine your userId from JWT");
+          return;
+        }
+
+        const receiver = document.getElementById("receiver").value.trim();
+        const content = document.getElementById("content").value.trim();
+
+        if (!receiver || !content) {
+          logMessage("⚠️ Enter receiver userId and message!");
+          return;
+        }
+        //Then send message
+        socket.emit("send_message", {
+          receiverId: receiver,
+          content,
+          type: "TEXT",
+        });
+
+        logMessage(`You (${registeredUser}): ${content}`);
+      }
+
+      // Send media (image/audio) to server
+      async function sendMedia() {
+        if (!socket || !isConnected) {
+          logMessage("⚠️ Connect with a JWT first!");
+          return;
+        }
+        if (!registeredUser) {
+          logMessage("⚠️ Could not determine your userId from JWT");
+          return;
+        }
+
+        const receiver = document.getElementById("receiver").value.trim();
+        const fileInput = document.getElementById("mediaFile");
+        const file = fileInput.files[0];
+
+        if (!receiver) {
+          logMessage("⚠️ Enter receiver userId!");
+          return;
+        }
+        if (!file) {
+          logMessage("⚠️ Select an image or audio file!");
+          return;
+        }
+
+        // Determine type based on file MIME type
+        let mediaType;
+        if (file.type.startsWith("image/")) {
+          mediaType = "IMAGE";
+        } else if (file.type.startsWith("audio/")) {
+          mediaType = "AUDIO";
+        } else {
+          logMessage("⚠️ Only image or audio files are supported!");
+          return;
+        }
+
+        try {
+          logMessage(`⏳ Uploading ${file.name}...`);
+
+          // Upload file with receiver info - server saves message and broadcasts
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("receiverId", receiver);
+          formData.append("type", mediaType);
+
+          const base = getApiBase();
+          const token = document.getElementById("token").value.trim();
+
+          const uploadRes = await fetch(`${base}/upload/media`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          });
+
+          const uploadData = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok) {
+            throw new Error(uploadData.message || "Upload failed");
+          }
+
+          const mediaKey = uploadData.mediaKey || uploadData.key;
+          if (!mediaKey) {
+            throw new Error("Upload succeeded but no mediaKey returned");
+          }
+
+          socket.emit("send_message", {
+            receiverId: receiver,
+            mediaUrl: mediaKey,
+            type: mediaType,
+          });
+
+          logMessage(`✅ Uploaded ${mediaType.toLowerCase()} and sent message`);
+
+          // Clear file input
+          fileInput.value = "";
+
+        } catch (err) {
+          logMessage(`❌ Media send failed: ${err.message}`);
+        }
+      }
+
+      function logMessage(message) {
+        const line = document.createElement("div");
+        line.textContent = message;
+        log.appendChild(line);
+      }
+
+      function logMedia(prefix, html) {
+        const div = document.createElement("div");
+        div.innerHTML = `${prefix} ${html}`;
+        log.appendChild(div);
+      }
+
+      // Voice Recording Functions
+      async function startRecording() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          
+          // Determine best supported audio format
+          const mimeType = getSupportedMimeType();
+          const options = mimeType ? { mimeType } : {};
+          
+          mediaRecorder = new MediaRecorder(stream, options);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              audioChunks.push(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = () => {
+            const mimeType = mediaRecorder.mimeType || 'audio/webm';
+            recordedBlob = new Blob(audioChunks, { type: mimeType });
+            const audioUrl = URL.createObjectURL(recordedBlob);
+            
+            const recordedAudio = document.getElementById("recordedAudio");
+            recordedAudio.src = audioUrl;
+            
+            document.getElementById("recordingPreview").style.display = "block";
+            document.getElementById("recordingStatus").textContent = "Recording complete!";
+            document.getElementById("recordingStatus").style.color = "green";
+            
+            // Stop all tracks to release microphone
+            stream.getTracks().forEach(track => track.stop());
+          };
+
+          mediaRecorder.onerror = (event) => {
+            logMessage(`❌ Recording error: ${event.error}`);
+            stopRecordingUI();
+          };
+
+          mediaRecorder.start(100); // Collect data every 100ms
+          
+          // Update UI
+          document.getElementById("startRecordBtn").disabled = true;
+          document.getElementById("stopRecordBtn").disabled = false;
+          document.getElementById("recordingStatus").textContent = "🔴 Recording...";
+          document.getElementById("recordingStatus").style.color = "red";
+          document.getElementById("recordingPreview").style.display = "none";
+          
+          // Start timer
+          recordingStartTime = Date.now();
+          document.getElementById("recordingTimer").style.display = "block";
+          timerInterval = setInterval(updateTimer, 1000);
+          
+          logMessage("🎤 Recording started...");
+        } catch (err) {
+          logMessage(`❌ Could not start recording: ${err.message}`);
+          if (err.name === "NotAllowedError") {
+            logMessage("⚠️ Microphone access denied. Please allow microphone access in your browser.");
+          }
+        }
+      }
+
+      function getSupportedMimeType() {
+        const types = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          'audio/mp4',
+          'audio/mpeg'
+        ];
+        for (const type of types) {
+          if (MediaRecorder.isTypeSupported(type)) {
+            return type;
+          }
+        }
+        return null;
+      }
+
+      function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+          stopRecordingUI();
+          logMessage("⏹️ Recording stopped");
+        }
+      }
+
+      function stopRecordingUI() {
+        document.getElementById("startRecordBtn").disabled = false;
+        document.getElementById("stopRecordBtn").disabled = true;
+        
+        // Stop timer
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+
+      function updateTimer() {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        document.getElementById("timerDisplay").textContent = `${minutes}:${seconds}`;
+      }
+
+      function discardRecording() {
+        clearRecordingState();
+        logMessage("🗑️ Recording discarded");
+      }
+
+      function clearRecordingState() {
+        recordedBlob = null;
+        audioChunks = [];
+        document.getElementById("recordingPreview").style.display = "none";
+        document.getElementById("recordingTimer").style.display = "none";
+        document.getElementById("recordingStatus").textContent = "";
+        document.getElementById("recordedAudio").src = "";
+      }
+
+      async function sendRecordedAudio() {
+        if (!socket || !isConnected) {
+          logMessage("⚠️ Connect with a JWT first!");
+          return;
+        }
+        if (!registeredUser) {
+          logMessage("⚠️ Could not determine your userId from JWT");
+          return;
+        }
+        if (!recordedBlob) {
+          logMessage("⚠️ No recording to send!");
+          return;
+        }
+
+        const receiver = document.getElementById("receiver").value.trim();
+        if (!receiver) {
+          logMessage("⚠️ Enter receiver userId!");
+          return;
+        }
+
+        try {
+          logMessage("⏳ Uploading voice recording...");
+
+          // Create file from blob with appropriate extension
+          const extension = getFileExtension(recordedBlob.type);
+          const fileName = `voice-recording-${Date.now()}.${extension}`;
+          const file = new File([recordedBlob], fileName, { type: recordedBlob.type });
+
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("receiverId", receiver);
+          formData.append("type", "AUDIO");
+
+          const base = getApiBase();
+          const token = document.getElementById("token").value.trim();
+
+          const uploadRes = await fetch(`${base}/upload/media`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          });
+
+          const uploadData = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok) {
+            throw new Error(uploadData.message || "Upload failed");
+          }
+
+          const mediaKey = uploadData.mediaKey || uploadData.key;
+          if (!mediaKey) {
+            throw new Error("Upload succeeded but no mediaKey returned");
+          }
+
+          socket.emit("send_message", {
+            receiverId: receiver,
+            mediaUrl: mediaKey,
+            type: "AUDIO",
+          });
+
+          logMessage(`✅ Uploaded voice recording and sent message`);
+
+          // Clear recording UI after successful send (without "discarded" message)
+          clearRecordingState();
+
+        } catch (err) {
+          logMessage(`❌ Voice recording send failed: ${err.message}`);
+        }
+      }
+
+      function getFileExtension(mimeType) {
+        const extensions = {
+          'audio/webm': 'webm',
+          'audio/webm;codecs=opus': 'webm',
+          'audio/ogg': 'ogg',
+          'audio/ogg;codecs=opus': 'ogg',
+          'audio/mp4': 'm4a',
+          'audio/mpeg': 'mp3',
+          'audio/wav': 'wav'
+        };
+        return extensions[mimeType] || 'webm';
+      }
+    </script>
+  </body>
+</html>
