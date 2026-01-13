@@ -15,16 +15,20 @@ NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.ama
 
 ## Getting Started
 
-First, run the development server:
+### Deploy / run from scratch (after cloning from GitHub)
+
+1) Add the `.env` file (as shown above)
+
+2) Install dependencies
+
+```bash
+npm install
+```
+
+3) Run the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
