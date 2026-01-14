@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { Search, Edit, ArrowLeft, Send, Sparkles, X } from 'lucide-react';
+import { Search, Edit, ArrowLeft, Send, Sparkles, X, Image, Mic, Square, Trash2 } from 'lucide-react';
 import { BottomNav } from '@/components/app/BottomNav';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ interface Message {
   senderName: string;
   senderAvatar?: string;
   timestamp: string;
+  type?: 'TEXT' | 'IMAGE' | 'AUDIO';
+  mediaUrl?: string;
 }
 
 interface Conversation {
@@ -41,6 +43,21 @@ export default function DialoguePage() {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [newUserId, setNewUserId] = useState('');
   
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Socket.IO connection
   const socketRef = useRef<Socket | null>(null);
   const currentUserId = getStoredUserId();
@@ -53,6 +70,192 @@ export default function DialoguePage() {
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     };
   }, []);
+
+  // Image upload handlers
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setImagePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearImageSelection = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSendImage = async () => {
+    if (!selectedImage || !selectedConversation) return;
+    
+    setUploading(true);
+    try {
+      const token = getStoredToken();
+      const formData = new FormData();
+      formData.append('file', selectedImage);
+      formData.append('receiverId', selectedConversation);
+      formData.append('type', 'IMAGE');
+
+      const response = await fetch(`${DIALOGUE_BACKEND_URL}/upload/media`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const data = await response.json();
+      const mediaKey = data.mediaKey || data.key;
+
+      // Send message via WebSocket
+      socketRef.current?.emit('send_message', {
+        receiverId: selectedConversation,
+        mediaUrl: mediaKey,
+        type: 'IMAGE',
+      });
+
+      clearImageSelection();
+    } catch (error) {
+      console.error('Error uploading image:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Voice recording handlers
+  const getSupportedMimeType = () => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',
+      'audio/mpeg'
+    ];
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return null;
+  };
+
+  const getFileExtension = (mimeType: string) => {
+    const extensions: Record<string, string> = {
+      'audio/webm': 'webm',
+      'audio/webm;codecs=opus': 'webm',
+      'audio/ogg': 'ogg',
+      'audio/ogg;codecs=opus': 'ogg',
+      'audio/mp4': 'm4a',
+      'audio/mpeg': 'mp3',
+      'audio/wav': 'wav'
+    };
+    return extensions[mimeType] || 'webm';
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getSupportedMimeType();
+      const options = mimeType ? { mimeType } : {};
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        setRecordedBlob(blob);
+        setAudioPreviewUrl(URL.createObjectURL(blob));
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start(100);
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Could not start recording:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const discardRecording = () => {
+    setRecordedBlob(null);
+    setAudioPreviewUrl(null);
+    setRecordingTime(0);
+  };
+
+  const handleSendVoice = async () => {
+    if (!recordedBlob || !selectedConversation) return;
+    
+    setUploading(true);
+    try {
+      const token = getStoredToken();
+      const extension = getFileExtension(recordedBlob.type);
+      const fileName = `voice-recording-${Date.now()}.${extension}`;
+      const file = new File([recordedBlob], fileName, { type: recordedBlob.type });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('receiverId', selectedConversation);
+      formData.append('type', 'AUDIO');
+
+      const response = await fetch(`${DIALOGUE_BACKEND_URL}/upload/media`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const data = await response.json();
+      const mediaKey = data.mediaKey || data.key;
+
+      // Send message via WebSocket
+      socketRef.current?.emit('send_message', {
+        receiverId: selectedConversation,
+        mediaUrl: mediaKey,
+        type: 'AUDIO',
+      });
+
+      discardRecording();
+    } catch (error) {
+      console.error('Error uploading voice recording:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
 
   // Initialize Socket.IO connection
   useEffect(() => {
@@ -81,6 +284,8 @@ export default function DialoguePage() {
         sender: message.senderId === currentUserId ? 'user' : 'other',
         senderName: message.senderId === currentUserId ? 'You' : message.senderId,
         timestamp: message.createdAt || new Date().toISOString(),
+        type: message.type || 'TEXT',
+        mediaUrl: message.mediaUrl,
       };
       
       setMessages((prev) => {
@@ -93,10 +298,11 @@ export default function DialoguePage() {
       setConversations((prev) => {
         const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
         const existing = prev.find(c => c.id === otherUserId);
+        const lastMessageText = message.type === 'IMAGE' ? '📷 Image' : message.type === 'AUDIO' ? '🎤 Voice message' : (message.content || '');
         if (existing) {
           return prev.map(c => 
             c.id === otherUserId 
-              ? { ...c, lastMessage: message.content || '', timestamp: message.createdAt }
+              ? { ...c, lastMessage: lastMessageText, timestamp: message.createdAt }
               : c
           );
         } else {
@@ -104,7 +310,7 @@ export default function DialoguePage() {
           return [{
             id: otherUserId,
             name: otherUserId,
-            lastMessage: message.content || '',
+            lastMessage: lastMessageText,
             timestamp: message.createdAt || new Date().toISOString(),
             unread: 1,
             status: 'away' as const,
@@ -322,7 +528,25 @@ export default function DialoguePage() {
                       : 'bg-[#3C6610] text-white'
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.text}</p>
+                  {/* Render based on message type */}
+                  {message.type === 'IMAGE' && message.mediaUrl ? (
+                    <img 
+                      src={message.mediaUrl} 
+                      alt="Shared image" 
+                      className="max-w-full rounded-lg max-h-64 object-contain"
+                      loading="lazy"
+                    />
+                  ) : message.type === 'AUDIO' && message.mediaUrl ? (
+                    <div className="min-w-[200px]">
+                      <audio 
+                        src={message.mediaUrl} 
+                        controls 
+                        className="w-full h-10"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-relaxed">{message.text}</p>
+                  )}
                   <p className={`text-xs mt-1.5 ${
                     message.sender === 'user' ? 'text-gray-500' : 'text-white/70'
                   }`}>
@@ -335,7 +559,57 @@ export default function DialoguePage() {
 
           {/* Input */}
           <div className="bg-[#EFF3EC] border-t border-gray-200 px-4 py-3">
+            {/* Image Preview */}
+            {imagePreview && (
+              <div className="mb-3 relative inline-block">
+                <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
+                <button
+                  onClick={clearImageSelection}
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Voice Recording Preview */}
+            {recordedBlob && audioPreviewUrl && (
+              <div className="mb-3 flex items-center gap-3 bg-white rounded-lg p-3">
+                <audio src={audioPreviewUrl} controls className="h-8 flex-1" />
+                <button
+                  onClick={discardRecording}
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleSendVoice}
+                  disabled={uploading}
+                  className="p-2 bg-[#3C6610] text-white rounded-full hover:bg-[#2d4c0c] disabled:opacity-50 transition-colors"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Recording Indicator */}
+            {isRecording && (
+              <div className="mb-3 flex items-center gap-2 text-red-500">
+                <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                <span className="text-sm font-medium">Recording: {formatRecordingTime(recordingTime)}</span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+
               <Input
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
@@ -344,13 +618,50 @@ export default function DialoguePage() {
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleSendMessage();
+                    if (selectedImage) {
+                      handleSendImage();
+                    } else {
+                      handleSendMessage();
+                    }
                   }
                 }}
+                disabled={isRecording}
               />
+
+              {/* Image upload button */}
               <button
-                onClick={handleSendMessage}
-                disabled={!messageText.trim()}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isRecording || uploading}
+                className="p-2.5 rounded-full text-[#3C6610] hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Send image"
+              >
+                <Image className="w-5 h-5" />
+              </button>
+
+              {/* Voice recording button */}
+              {isRecording ? (
+                <button
+                  onClick={stopRecording}
+                  className="p-2.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors animate-pulse"
+                  title="Stop recording"
+                >
+                  <Square className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={startRecording}
+                  disabled={uploading || !!recordedBlob}
+                  className="p-2.5 rounded-full text-[#3C6610] hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Record voice message"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Send button */}
+              <button
+                onClick={selectedImage ? handleSendImage : handleSendMessage}
+                disabled={(!messageText.trim() && !selectedImage) || isRecording || uploading}
                 className="p-2.5 rounded-full bg-[#3C6610] text-white hover:bg-[#2d4c0c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-5 h-5" />
