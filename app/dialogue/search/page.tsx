@@ -48,10 +48,10 @@ export default function DialogueSearchPage() {
           </Avatar>
         </div>
 
-        {/* Empty State */}
+        {/* Empty State - TODO: Search functionality is not implemented yet */}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-gray-500 text-sm">Start typing to search conversations...</p>
+            <p className="text-gray-500 text-sm">Search functionality is not available yet.</p>
           </div>
         </div>
       </div>
