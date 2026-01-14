@@ -33,15 +33,8 @@ export default function AIPage() {
       return;
     }
 
-    // Initial greeting
-    setMessages([
-      {
-        id: 'greeting',
-        text: 'Hey John',
-        sender: 'ai',
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+    // Start with empty messages
+    setMessages([]);
   }, [router]);
 
   useEffect(() => {
@@ -137,9 +130,9 @@ export default function AIPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-white flex flex-col pb-24">
+      <div className="min-h-screen bg-[#EFF3EC] flex flex-col pb-24">
         {/* Status Bar (mock) */}
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
+        <div className="bg-[#EFF3EC] border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
           <span>9:41</span>
           <div className="flex items-center gap-1">
             <div className="w-4 h-4 border border-gray-600 rounded-sm flex items-center justify-center">
@@ -153,117 +146,60 @@ export default function AIPage() {
         </div>
 
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+        <div className="bg-[#EFF3EC] border-b border-gray-200 flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-2 text-[#3C6610] hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[#3C6610] flex items-center justify-center">
               <RefreshCw className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <p className="font-semibold text-gray-900 text-sm">Zentrale AI V.1.</p>
-            </div>
+            <p className="font-semibold text-gray-900 text-sm">Zentrais AI V.1.</p>
           </div>
           <button
             type="button"
             aria-label="Go to Dialogue"
             onClick={() => router.push('/dialogue')}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 text-[#3C6610] hover:bg-gray-100 rounded-full transition-colors"
           >
             <MessageSquare className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Side Menu */}
+        {/* Side Menu - TODO: Navigation bar is not available yet */}
         {showMenu && (
           <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowMenu(false)}>
             <div
-              className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto"
+              className="absolute left-0 top-0 h-full w-80 bg-[#9AA98F] shadow-lg overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-gray-200">
+              {/* Navigation bar content is not available */}
+              <div className="p-4 border-b border-[#8a9a7f]">
                 <div className="flex items-center justify-between mb-4">
-                  <Input placeholder="Search" className="flex-1 bg-white border-gray-300" />
+                  <p className="text-white font-semibold">Navigation</p>
                   <button
                     onClick={() => setShowMenu(false)}
-                    className="ml-2 p-2 text-gray-600 hover:bg-gray-100 rounded-full"
+                    className="p-2 text-white hover:bg-[#8a9a7f] rounded-full"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="new-dialog" />
-                  <label htmlFor="new-dialog" className="text-sm text-gray-700 cursor-pointer">
-                    New Dialog
-                  </label>
-                </div>
               </div>
-              <div className="p-4">
-                <p className="text-xs text-gray-500 mb-2 font-medium">Today</p>
-                <div className="space-y-1">
-                  {['Chat Title', 'Chat Title', 'Chat Title'].map((title, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer"
-                    >
-                      <p className="text-sm text-gray-700">{title}</p>
-                      <button className="text-gray-400 hover:text-gray-600 text-lg leading-none">⋯</button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mb-2 mt-4 font-medium">Yesterday</p>
-                <div className="space-y-1">
-                  {['Chat Title'].map((title, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer"
-                    >
-                      <p className="text-sm text-gray-700">{title}</p>
-                      <button className="text-gray-400 hover:text-gray-600 text-lg leading-none">⋯</button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mb-2 mt-4 font-medium">Last Week</p>
-                <div className="space-y-1">
-                  {['Chat Title'].map((title, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer"
-                    >
-                      <p className="text-sm text-gray-700">{title}</p>
-                      <button className="text-gray-400 hover:text-gray-600 text-lg leading-none">⋯</button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  className="w-full mt-6 bg-red-600 hover:bg-red-700 text-white rounded-full"
-                  onClick={() => {
-                    setMessages([]);
-                    setShowMenu(false);
-                  }}
-                >
-                  Clear History
-                </Button>
-              </div>
-              <div className="absolute bottom-4 right-4">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src="/user-image-1.png" />
-                  <AvatarFallback>U</AvatarFallback>
-                </Avatar>
+              <div className="flex-1 flex items-center justify-center p-8">
+                <p className="text-white/80 text-sm text-center">Navigation bar is not available yet.</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-white">
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-[#EFF3EC]">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Hey John</h2>
+              <p className="text-gray-500 text-sm">Start a conversation with Zentrais AI</p>
             </div>
           ) : (
             <>
@@ -303,7 +239,7 @@ export default function AIPage() {
         </div>
 
         {/* Input Area */}
-        <div className="bg-white border-t border-gray-200 p-4">
+        <div className="bg-[#EFF3EC] border-t border-gray-200 p-4">
           <Input
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
@@ -319,7 +255,7 @@ export default function AIPage() {
           <Button
             onClick={handleSend}
             disabled={!inputText.trim() || loading}
-            className="w-full rounded-full bg-green-600 hover:bg-green-700 text-white py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-full bg-[#3C6610] hover:bg-[#2d4c0c] text-white py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-4 h-4 mr-2" />
             Send

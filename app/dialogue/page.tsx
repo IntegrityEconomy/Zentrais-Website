@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { Search, Edit, ArrowLeft, Send, Bot, X } from 'lucide-react';
+import { Search, Edit, ArrowLeft, Send, Sparkles, X } from 'lucide-react';
 import { BottomNav } from '@/components/app/BottomNav';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -264,9 +264,9 @@ export default function DialoguePage() {
     const conversation = conversations.find((c) => c.id === selectedConversation);
     return (
       <>
-        <div className="min-h-screen bg-white flex flex-col pb-24">
+        <div className="min-h-screen bg-[#EFF3EC] flex flex-col pb-24">
           {/* Status Bar (mock) */}
-          <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
+          <div className="bg-[#EFF3EC] border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
             <span>9:41</span>
             <div className="flex items-center gap-1">
               <div className="w-4 h-4 border border-gray-600 rounded-sm flex items-center justify-center">
@@ -280,50 +280,51 @@ export default function DialoguePage() {
           </div>
 
           {/* Header */}
-          <div className="bg-white border-b border-gray-200 flex items-center justify-between px-4 py-3">
+          <div className="bg-[#EFF3EC] border-b border-gray-200 flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSelectedConversation(null)}
-                className="p-1 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-1 text-[#3C6610] hover:bg-gray-100 rounded-full transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="flex items-center gap-2">
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src={conversation?.avatar} />
-                  <AvatarFallback>{conversation?.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">{conversation?.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {conversation?.status === 'active' ? 'Active Now' : 'Away'}
-                  </p>
-                </div>
+              <div className="flex flex-col items-center">
+                <p className="font-semibold text-gray-900 text-sm">{conversation?.name}</p>
+                <p className="text-xs text-green-600 flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  {conversation?.status === 'active' ? 'Active Now' : 'Active Now'}
+                </p>
               </div>
             </div>
-            <Avatar className="w-8 h-8">
-              <AvatarImage src="/user-image-1.png" />
-              <AvatarFallback>U</AvatarFallback>
+            <Avatar className="w-10 h-10">
+              <AvatarImage src={conversation?.avatar} />
+              <AvatarFallback>{conversation?.name.charAt(0)}</AvatarFallback>
             </Avatar>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#EFF3EC]">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}
               >
+                {message.sender === 'other' && (
+                  <Avatar className="w-8 h-8 flex-shrink-0">
+                    <AvatarImage src={conversation?.avatar} />
+                    <AvatarFallback>{conversation?.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                )}
                 <div
                   className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
                     message.sender === 'user'
-                      ? 'bg-gray-200 text-gray-900'
-                      : 'bg-green-500 text-white'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'bg-[#3C6610] text-white'
                   }`}
                 >
                   <p className="text-sm leading-relaxed">{message.text}</p>
                   <p className={`text-xs mt-1.5 ${
-                    message.sender === 'user' ? 'text-gray-500' : 'text-green-50'
+                    message.sender === 'user' ? 'text-gray-500' : 'text-white/70'
                   }`}>
                     {formatTime(message.timestamp)}
                   </p>
@@ -333,7 +334,7 @@ export default function DialoguePage() {
           </div>
 
           {/* Input */}
-          <div className="bg-white border-t border-gray-200 px-4 py-3">
+          <div className="bg-[#EFF3EC] border-t border-gray-200 px-4 py-3">
             <div className="flex items-center gap-2">
               <Input
                 value={messageText}
@@ -350,7 +351,7 @@ export default function DialoguePage() {
               <button
                 onClick={handleSendMessage}
                 disabled={!messageText.trim()}
-                className="p-2.5 rounded-full bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2.5 rounded-full bg-[#3C6610] text-white hover:bg-[#2d4c0c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -365,9 +366,9 @@ export default function DialoguePage() {
   // Dialog List View
   return (
     <>
-      <div className="min-h-screen bg-white flex flex-col pb-24">
+      <div className="min-h-screen bg-[#EFF3EC] flex flex-col pb-24">
         {/* Status Bar (mock) */}
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
+        <div className="bg-[#EFF3EC] border-b border-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600">
           <span>9:41</span>
           <div className="flex items-center gap-1">
             <div className="w-4 h-4 border border-gray-600 rounded-sm flex items-center justify-center">
@@ -381,37 +382,42 @@ export default function DialoguePage() {
         </div>
 
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="bg-[#EFF3EC] border-b border-gray-100 px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10">
                 <AvatarImage src="/user-image-1.png" />
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Dialogs</h1>
-              </div>
+            </div>
+            <div className="flex items-center justify-center">
+              <img 
+                src="/dialogue_zentrais_logo.png" 
+                alt="Zentrais" 
+                className="h-8 w-auto"
+              />
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => router.push('/dialogue/ai')}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Open AI dialogue"
-              >
-                <Bot className="w-5 h-5" />
-              </button>
-              <button
                 onClick={() => router.push('/dialogue/search')}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 text-[#3C6610] hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Search conversations"
               >
                 <Search className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => router.push('/dialogue/ai')}
+                className="p-2 text-[#3C6610] hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Open AI dialogue"
+              >
+                <Sparkles className="w-5 h-5" />
               </button>
             </div>
           </div>
         </div>
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-[#EFF3EC]">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-gray-500 text-sm">Loading conversations...</p>
@@ -425,7 +431,7 @@ export default function DialoguePage() {
               <button
                 key={conversation.id}
                 onClick={() => setSelectedConversation(conversation.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-100 border-b border-gray-100 transition-colors"
               >
                 <Avatar className="w-12 h-12 flex-shrink-0">
                   <AvatarImage src={conversation.avatar} />
@@ -445,8 +451,8 @@ export default function DialoguePage() {
                   <p className="text-sm text-gray-600 truncate">{conversation.lastMessage}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                    <Edit className="w-3 h-3 text-white" />
+                  <div className="w-6 h-6 rounded-full bg-[#3C6610] flex items-center justify-center shadow-sm">
+                    <Edit className="w-3.5 h-3.5 text-white" />
                   </div>
                 </div>
               </button>
@@ -457,7 +463,7 @@ export default function DialoguePage() {
         {/* Floating New Conversation Button */}
         <button
           onClick={() => setShowNewConversation(true)}
-          className="fixed bottom-28 right-6 w-14 h-14 rounded-full bg-green-500 text-white shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center z-40"
+          className="fixed bottom-28 right-6 w-14 h-14 rounded-full bg-[#3C6610] text-white shadow-lg hover:bg-[#2d4c0c] transition-colors flex items-center justify-center z-40"
           aria-label="Start new conversation"
         >
           <Edit className="w-6 h-6" />
