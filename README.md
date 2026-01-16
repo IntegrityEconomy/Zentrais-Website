@@ -6,6 +6,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Databases
 Make sure to generate the databases for each backend/dialogue and backend/exchange
+
 ## Add .env file
 
 Please add .env file in the root directoy as follow
