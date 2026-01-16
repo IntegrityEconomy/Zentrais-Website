@@ -15,6 +15,14 @@ NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.ama
 
 ## Getting Started
 
+### Prerequisites
+
+- **Node.js (LTS)** and **npm** installed.
+	- Download from: https://nodejs.org/
+	- Verify install:
+		- `node -v`
+		- `npm -v`
+
 ### Deploy / run from scratch (after cloning from GitHub)
 
 1) Add the `.env` file (as shown above)
@@ -31,11 +39,28 @@ npm install
 npm run dev
 ```
 
+4) Open the app
+
+- http://localhost:3000
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+### Common npm commands
+
+- Install dependencies: `npm install`
+- Start dev server: `npm run dev`
+- Build for production: `npm run build`
+- Start production server: `npm run start`
+- Lint: `npm run lint`
+
+### Troubleshooting
+
+- If `npm install` fails, delete `node_modules` and `package-lock.json`, then rerun `npm install`.
+- If port 3000 is in use, run `npm run dev -- -p 3001` and open http://localhost:3001
 
 ## Learn More
 
