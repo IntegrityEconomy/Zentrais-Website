@@ -9,7 +9,7 @@ Please add .env file in the root directoy as follow
 ```plain
 # NEXT_PUBLIC_ is for client.
 # Server-side can use either.
-# Local dev defaults (recommended)
+# Local dev
 DIALOGUE_BACKEND_URL=http://localhost:3001
 NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://localhost:3001
 
