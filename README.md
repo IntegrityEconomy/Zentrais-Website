@@ -5,7 +5,70 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 
 ## Databases
-Make sure to generate the databases for each backend/dialogue and backend/exchange
+This repo runs two backends that each use PostgreSQL:
+
+- **Dialogue backend** ([backend/dialogue](backend/dialogue)) uses **Prisma**.
+- **Exchange backend** ([backend/exchange](backend/exchange)) uses **Sequelize**.
+
+### 1) Start PostgreSQL
+
+You can use any local Postgres instance. If you want a quick local DB via Docker, you can start the Dialogue repo's Postgres container and reuse it:
+
+```powershell
+cd backend/dialogue
+docker compose up -d db
+```
+
+That creates a Postgres instance on `localhost:5432` with a default database named `chatdb`.
+
+Create the Exchange database (if it doesn't exist yet):
+
+```powershell
+psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE exchange_db;"
+```
+
+### 2) Dialogue database (Prisma)
+
+Set `DATABASE_URL` in [backend/dialogue/.env](backend/dialogue/.env) (or create it from `env.example`) to point at your Postgres:
+
+```text
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/chatdb?schema=public
+```
+
+Then run:
+
+```bash
+cd backend/dialogue
+npm install
+npm run prisma:generate
+npm run prisma:deploy
+```
+
+Notes:
+
+- `prisma:generate` only generates the Prisma Client code (it does not create tables).
+- `prisma:deploy` applies the existing migrations to your database (recommended for local testing).
+- `prisma:migrate` (`prisma migrate dev`) is for creating new migrations during development.
+
+Optional: [backend/dialogue/prisma/full-schema.sql](backend/dialogue/prisma/full-schema.sql) is only for verifying/aligning against the final target schema. You generally do not need to import it for local dev if migrations are working.
+
+### 3) Exchange database (Sequelize)
+
+Create `backend/exchange/.env` from [backend/exchange/env.example](backend/exchange/env.example) and set:
+
+```text
+POSTGRES_URI=postgresql://postgres:postgres@localhost:5432/exchange_db
+JWT_SECRET=<must match backend/dialogue JWT_SECRET>
+```
+
+Then start the server; in development it will auto-create/update tables via Sequelize sync:
+
+```bash
+cd backend/exchange
+npm install
+npm run dev
+```
+
 
 ## Add .env file
 
