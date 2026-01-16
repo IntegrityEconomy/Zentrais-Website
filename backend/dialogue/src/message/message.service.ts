@@ -19,22 +19,22 @@ export class MessageService {
     // Fetch messages from database
     const messages = await prisma.message.findMany({
       where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
+        OR: [{ sender_id: userId }, { receiver_id: userId }],
       },
       orderBy: {
-        createdAt: 'asc',
+        created_at: 'asc',
       },
     });
 
     // Add presigned URL for media messages
     const mappedMessages = await Promise.all(
       messages.map(async (msg) => {
-        if (msg.mediaUrl) {
-          msg.mediaUrl = await this.uploadService.getPresignedUrl(msg.mediaUrl);
+        if (msg.media_url) {
+          msg.media_url = await this.uploadService.getPresignedUrl(msg.media_url);
           return { ...msg };
         }
         return msg;
-      })
+      }),
     );
 
     return mappedMessages;

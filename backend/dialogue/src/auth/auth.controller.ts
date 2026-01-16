@@ -22,7 +22,7 @@ export class AuthController {
     if (!isValid) throw new UnauthorizedException('Invalid credentials');
 
     const token = await this.authService.signToken(user.id);
-    return { token };
+    return { token, user: { id: user.id, email: user.email } };
   }
 
   @Post('register')

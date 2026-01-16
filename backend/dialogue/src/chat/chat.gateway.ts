@@ -62,7 +62,6 @@ export class ChatGateway implements OnGatewayConnection{
        this.server.to(message.sender_id).emit ( 'receive_message', message ) ;
        this.server.to(message.receiver_id).emit ('receive_message', message ) ;
     }
-    }
   
 }
 

@@ -277,15 +277,14 @@ export default function DialoguePage() {
 
     socket.on('receive_message', (message) => {
       console.log('Received message:', message);
-      // Transform backend message format to frontend format
       const newMessage: Message = {
         id: message.id,
         text: message.content || '',
-        sender: message.senderId === currentUserId ? 'user' : 'other',
-        senderName: message.senderId === currentUserId ? 'You' : message.senderId,
-        timestamp: message.createdAt || new Date().toISOString(),
+        sender: message.sender_id === currentUserId ? 'user' : 'other',
+        senderName: message.sender_id === currentUserId ? 'You' : message.sender_id,
+        timestamp: message.created_at || new Date().toISOString(),
         type: message.type || 'TEXT',
-        mediaUrl: message.mediaUrl,
+        mediaUrl: message.media_url,
       };
       
       setMessages((prev) => {
@@ -296,13 +295,13 @@ export default function DialoguePage() {
 
       // Update conversation list with last message
       setConversations((prev) => {
-        const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
+        const otherUserId = message.sender_id === currentUserId ? message.receiver_id : message.sender_id;
         const existing = prev.find(c => c.id === otherUserId);
         const lastMessageText = message.type === 'IMAGE' ? '📷 Image' : message.type === 'AUDIO' ? '🎤 Voice message' : (message.content || '');
         if (existing) {
           return prev.map(c => 
             c.id === otherUserId 
-              ? { ...c, lastMessage: lastMessageText, timestamp: message.createdAt }
+              ? { ...c, lastMessage: lastMessageText, timestamp: message.created_at }
               : c
           );
         } else {
@@ -311,7 +310,7 @@ export default function DialoguePage() {
             id: otherUserId,
             name: otherUserId,
             lastMessage: lastMessageText,
-            timestamp: message.createdAt || new Date().toISOString(),
+            timestamp: message.created_at || new Date().toISOString(),
             unread: 1,
             status: 'away' as const,
           }, ...prev];

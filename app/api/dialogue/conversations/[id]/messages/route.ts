@@ -4,12 +4,12 @@ import { getUserIdFromRequest } from '@/lib/auth';
 
 interface BackendMessage {
   id: string;
-  senderId: string;
-  receiverId: string;
+  sender_id: string;
+  receiver_id: string;
   content: string | null;
   type: 'TEXT' | 'IMAGE' | 'AUDIO';
-  mediaUrl: string | null;
-  createdAt: string;
+  media_url: string | null;
+  created_at: string;
 }
 
 export async function GET(
@@ -40,19 +40,19 @@ export async function GET(
     // Filter messages for this specific conversation (with conversationPartnerId)
     const conversationMessages = allMessages.filter(
       (msg) =>
-        (msg.senderId === userId && msg.receiverId === conversationPartnerId) ||
-        (msg.senderId === conversationPartnerId && msg.receiverId === userId)
+        (msg.sender_id === userId && msg.receiver_id === conversationPartnerId) ||
+        (msg.sender_id === conversationPartnerId && msg.receiver_id === userId)
     );
 
     // Transform to frontend format
     const messages = conversationMessages.map((msg) => ({
       id: msg.id,
       text: msg.content || (msg.type === 'IMAGE' ? '[Image]' : msg.type === 'AUDIO' ? '[Audio]' : ''),
-      sender: msg.senderId === userId ? 'user' : 'other',
-      senderName: msg.senderId === userId ? 'You' : 'User',
-      timestamp: msg.createdAt,
+      sender: msg.sender_id === userId ? 'user' : 'other',
+      senderName: msg.sender_id === userId ? 'You' : 'User',
+      timestamp: msg.created_at,
       type: msg.type,
-      mediaUrl: msg.mediaUrl,
+      mediaUrl: msg.media_url,
     }));
 
     return NextResponse.json({ messages });

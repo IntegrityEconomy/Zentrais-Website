@@ -6,97 +6,124 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["core", "dialog", "public"]
+  schemas  = ["core", "dialog"]
 }
 
-model AiMessage {
-  id               String        @id
-  threadId         String
-  role             AiMessageRole
-  content          String
-  emotionScore     Int?
-  emotionLabel     String?
-  emotionReasoning String?
-  createdAt        DateTime      @default(now())
-  AiThread         AiThread      @relation(fields: [threadId], references: [id], onDelete: Cascade)
-
-  @@index([threadId, createdAt])
-  @@schema("public")
-}
-
-model AiThread {
-  id                String      @id
-  userId            String
-  title             String?
-  langgraphThreadId String      @unique
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime
-  AiMessage         AiMessage[]
-  User              User        @relation(fields: [userId], references: [id])
-
-  @@index([userId, updatedAt])
-  @@schema("public")
-}
-
-model Message {
-  id                            String      @id
-  senderId                      String
-  receiverId                    String
-  content                       String?
-  createdAt                     DateTime    @default(now())
-  mediaUrl                      String?
-  type                          MessageType @default(TEXT)
-  User_Message_receiverIdToUser User        @relation("Message_receiverIdToUser", fields: [receiverId], references: [id])
-  User_Message_senderIdToUser   User        @relation("Message_senderIdToUser", fields: [senderId], references: [id])
-
-  @@schema("public")
-}
-
-model User {
-  id                               String     @id
-  username                         String     @unique
-  password                         String
-  createdAt                        DateTime   @default(now())
-  avatar_url                       String?
-  created_at                       DateTime   @default(now())
-  deleted_at                       DateTime?
-  display_name                     String?
-  email                            String     @unique
-  email_hash                       String     @unique
-  email_verified                   Boolean    @default(false)
-  is_active                        Boolean    @default(true)
-  org_default_id                   String?
-  updated_at                       DateTime
-  AiThread                         AiThread[]
-  Message_Message_receiverIdToUser Message[]  @relation("Message_receiverIdToUser")
-  Message_Message_senderIdToUser   Message[]  @relation("Message_senderIdToUser")
-  User_PII                         User_PII?
-
-  @@schema("public")
-}
-
-model User_PII {
-  user_id    String  @id
-  email      String
-  phone      String?
-  legal_name String?
-  address    String?
-  User       User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@schema("public")
-}
+// =============================================
+// ENUMS - Matching SQL schema exactly
+// =============================================
 
 enum MessageType {
   TEXT
   IMAGE
   AUDIO
 
-  @@schema("public")
+  @@schema("dialog")
 }
 
 enum AiMessageRole {
   USER
   ASSISTANT
 
-  @@schema("public")
+  @@schema("dialog")
 }
+
+// =============================================
+// CORE SCHEMA - Users & Identity
+// =============================================
+
+model User {
+  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  org_default_id String?
+  username       String    @unique
+  email          String    @unique
+  email_hash     String    @unique
+  email_verified Boolean   @default(false)
+  display_name   String?
+  avatar_url     String?
+  password       String
+  is_active      Boolean   @default(true)
+  deleted_at     DateTime? @db.Timestamp(3)
+  created_at     DateTime  @default(now()) @db.Timestamp(3)
+  updated_at     DateTime  @default(now()) @db.Timestamp(3)
+
+  // Relations
+  messagesSent     Message[]  @relation("MessageSender")
+  messagesReceived Message[]  @relation("MessageReceiver")
+  aiThreads        AiThread[]
+  pii              UserPII?
+
+  @@map("users")
+  @@schema("core")
+}
+
+model UserPII {
+  user_id    String    @id
+  email      String
+  phone      String?
+  legal_name String?
+  address    String?
+  deleted_at DateTime? @db.Timestamp(3)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_pii")
+  @@schema("core")
+}
+
+// =============================================
+// DIALOG SCHEMA - Messages & AI Conversations
+// =============================================
+
+model Message {
+  id          String      @id @default(dbgenerated("gen_random_uuid()::text"))
+  sender_id   String
+  receiver_id String
+  content     String?
+  type        MessageType @default(TEXT)
+  media_url   String?
+  created_at  DateTime    @default(now()) @db.Timestamp(3)
+
+  sender   User @relation("MessageSender", fields: [sender_id], references: [id])
+  receiver User @relation("MessageReceiver", fields: [receiver_id], references: [id])
+
+  @@index([sender_id])
+  @@index([receiver_id])
+  @@index([created_at(sort: Desc)])
+  @@map("messages")
+  @@schema("dialog")
+}
+
+model AiThread {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  user_id             String
+  title               String?
+  langgraph_thread_id String   @unique
+  created_at          DateTime @default(now()) @db.Timestamp(3)
+  updated_at          DateTime @default(now()) @db.Timestamp(3)
+
+  user     User        @relation(fields: [user_id], references: [id])
+  messages AiMessage[]
+
+  @@index([user_id, updated_at])
+  @@map("ai_threads")
+  @@schema("dialog")
+}
+
+model AiMessage {
+  id                String        @id @default(dbgenerated("gen_random_uuid()::text"))
+  thread_id         String
+  role              AiMessageRole
+  content           String
+  emotion_score     Int?
+  emotion_label     String?
+  emotion_reasoning String?
+  created_at        DateTime      @default(now()) @db.Timestamp(3)
+
+  thread AiThread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+
+  @@index([thread_id, created_at])
+  @@map("ai_messages")
+  @@schema("dialog")
+}
+
