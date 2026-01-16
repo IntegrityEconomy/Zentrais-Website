@@ -1,6 +1,6 @@
-import { Controller, Post, Body, UnauthorizedException,BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 @Controller('auth')
 export class AuthController {

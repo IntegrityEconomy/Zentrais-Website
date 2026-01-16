@@ -28,11 +28,11 @@ export class ChatService {
     //if (!receiver) throw new Error(`Receiver with id ${receiverId} does not exist`);
     return prisma.message.create({
       data: {
-        senderId : senderId,
-        receiverId : receiverId,
+        sender_id: senderId,
+        receiver_id: receiverId,
         content,
         type: type as MessageType,
-        mediaUrl,
+        media_url: mediaUrl,
       },
     });
   }

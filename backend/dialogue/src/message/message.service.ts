@@ -45,12 +45,12 @@ export class MessageService {
     const messages = await prisma.message.findMany({
       where: {
         OR: [
-          { senderId: userId },
-          { receiverId: userId },
+          { sender_id: userId },
+          { receiver_id: userId },
         ],
       },
       orderBy: {
-        createdAt: 'desc', // latest messages first
+        created_at: 'desc', // latest messages first
       },
     });
 
@@ -60,7 +60,7 @@ export class MessageService {
     const chatMap = new Map<string, typeof messages[0]>();
 
     for (const msg of messages) {
-      const chatUserId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      const chatUserId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       if (!chatMap.has(chatUserId)) {
         chatMap.set(chatUserId, msg);
       }
@@ -75,7 +75,7 @@ export class MessageService {
 
     // 4. Map to chat list format
     const chatList = Array.from(chatMap.values()).map((msg) => {
-      const chatUserId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      const chatUserId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       const chatUser = users.find((u) => u.id === chatUserId);
 
       // For UI: show "Image" or "Audio" instead of raw content
@@ -88,7 +88,7 @@ export class MessageService {
         chatUsername: chatUser?.username || 'Unknown',
         lastMessage,
         lastMessageType: msg.type,
-        lastMessageTime: msg.createdAt,
+        lastMessageTime: msg.created_at,
       };
     });
 

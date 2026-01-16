@@ -31,7 +31,7 @@ export class AiService {
       ? await this.prisma.aiThread.findFirst({
           where: {
             id: input.threadId,
-            userId: input.userId,
+            user_id: input.userId,
           },
         })
       : null;
@@ -42,7 +42,7 @@ export class AiService {
       body: JSON.stringify({
         message: input.message,
         user_id: input.userId,
-        thread_id: existingThread?.langgraphThreadId || undefined,
+        thread_id: existingThread?.langgraph_thread_id || undefined,
       }),
     });
 
@@ -72,10 +72,10 @@ export class AiService {
     let thread = existingThread;
     if (!thread) {
       const existingByLanggraph = await this.prisma.aiThread.findUnique({
-        where: { langgraphThreadId },
+        where: { langgraph_thread_id: langgraphThreadId },
       });
 
-      if (existingByLanggraph && existingByLanggraph.userId !== input.userId) {
+      if (existingByLanggraph && existingByLanggraph.user_id !== input.userId) {
         throw new Error('Thread ownership mismatch');
       }
 
@@ -83,8 +83,8 @@ export class AiService {
         existingByLanggraph ??
         (await this.prisma.aiThread.create({
           data: {
-            userId: input.userId,
-            langgraphThreadId,
+            user_id: input.userId,
+            langgraph_thread_id: langgraphThreadId,
           },
         }));
     }
@@ -95,22 +95,22 @@ export class AiService {
     await this.prisma.$transaction([
       this.prisma.aiMessage.create({
         data: {
-          threadId: thread.id,
+          thread_id: thread.id,
           role: 'USER',
           content: input.message,
         },
       }),
       this.prisma.aiMessage.create({
         data: {
-          threadId: thread.id,
+          thread_id: thread.id,
           role: 'ASSISTANT',
           content: responseText,
-          emotionScore:
+          emotion_score:
             typeof emotion?.score === 'number' && Number.isFinite(emotion.score)
               ? Math.trunc(emotion.score)
               : null,
-          emotionLabel: typeof emotion?.label === 'string' ? emotion.label : null,
-          emotionReasoning: typeof emotion?.reasoning === 'string' ? emotion.reasoning : null,
+          emotion_label: typeof emotion?.label === 'string' ? emotion.label : null,
+          emotion_reasoning: typeof emotion?.reasoning === 'string' ? emotion.reasoning : null,
         },
       }),
     ]);
@@ -124,17 +124,17 @@ export class AiService {
 
   async listThreads(userId: string) {
     return this.prisma.aiThread.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
+      where: { user_id: userId },
+      orderBy: { updated_at: 'desc' },
     });
   }
 
   async getThread(userId: string, threadId: string) {
     return this.prisma.aiThread.findFirst({
-      where: { id: threadId, userId },
+      where: { id: threadId, user_id: userId },
       include: {
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { created_at: 'asc' },
         },
       },
     });
@@ -148,7 +148,7 @@ export class AiService {
       ? await this.prisma.aiThread.findFirst({
           where: {
             id: input.threadId,
-            userId: input.userId,
+            user_id: input.userId,
           },
         })
       : null;
@@ -158,7 +158,7 @@ export class AiService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         user_id: input.userId,
-        thread_id: thread?.langgraphThreadId || undefined,
+        thread_id: thread?.langgraph_thread_id || undefined,
       }),
     });
 

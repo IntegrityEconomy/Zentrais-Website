@@ -54,13 +54,14 @@ export class ChatGateway implements OnGatewayConnection{
                 mediaUrl: data.type !='TEXT'? data.mediaUrl : null
         }) ;
         
-        if (message.mediaUrl && message.type !== 'TEXT') {
-          message.mediaUrl = await this.uploadService.getPresignedUrl(message.mediaUrl);  
+        if (message.media_url && message.type !== 'TEXT') {
+          message.media_url = await this.uploadService.getPresignedUrl(message.media_url);  
         }
 
        // Emit to sender + receiver only
-       this.server.to(message.senderId).emit ( 'receive_message', message ) ;
-       this.server.to(message.receiverId).emit ('receive_message', message ) ;
+       this.server.to(message.sender_id).emit ( 'receive_message', message ) ;
+       this.server.to(message.receiver_id).emit ('receive_message', message ) ;
+    }
     }
   
 }
