@@ -23,6 +23,7 @@ export interface Listing {
   latitude?: number;
   longitude?: number;
   location_name?: string;
+  images?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +49,7 @@ export interface CreateListingData {
   latitude?: number;
   longitude?: number;
   location_name?: string;
+  images?: string[];
 }
 
 export interface FeedParams {

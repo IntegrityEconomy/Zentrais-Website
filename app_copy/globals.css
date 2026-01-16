@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F6EEE6;
+  --foreground: #1a1a1a;
+  --header-bg: #F6EEE6;
+  --accent-orange: #A05205;
+  --accent-orange-hover: #B86215;
+  --card-bg: #F6EEE6;
+  --text-secondary: #666666;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}

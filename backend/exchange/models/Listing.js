@@ -52,6 +52,10 @@ const Listing = sequelize.define('Listing', {
     location_name: {
         type: DataTypes.STRING(255),
     },
+    images: {
+        type: DataTypes.JSON,
+        defaultValue: [],
+    },
 }, {
     tableName: 'listings',
     timestamps: true,

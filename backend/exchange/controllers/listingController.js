@@ -236,6 +236,7 @@ exports.createListing = async (req, res, next) => {
             latitude,
             longitude,
             location_name,
+            images,
         } = req.body;
 
         if (!seller_id) {
@@ -259,6 +260,7 @@ exports.createListing = async (req, res, next) => {
             latitude: latitude || null,
             longitude: longitude || null,
             location_name: location_name || null,
+            images: images || [],
         });
 
         res.status(201).json(listing);
@@ -383,6 +385,16 @@ exports.getSavedListings = async (req, res, next) => {
         }));
 
         res.json(result);
+    } catch (err) {
+        next(err);
+    }
+};
+
+// DELETE /listings - Delete all listings (for development/testing)
+exports.deleteAllListings = async (req, res, next) => {
+    try {
+        const count = await Listing.destroy({ where: {}, truncate: true });
+        res.json({ message: 'All listings deleted', count });
     } catch (err) {
         next(err);
     }

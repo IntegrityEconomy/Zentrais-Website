@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, MapPin, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
 import { useExchangeAPI } from '../hooks/useExchangeAPI';
@@ -20,12 +20,105 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
   });
   
   const [categories, setCategories] = useState<string[]>([]);
-  const [mapView, setMapView] = useState<'Map' | 'Satellite'>('Map');
+  const [mapZoom, setMapZoom] = useState(13);
   const [useGPS, setUseGPS] = useState(true);
-  const [location] = useState('Calgary, AB, Canada');
+  const [location, setLocation] = useState('');
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number }>({ lat: 51.0447, lng: -114.0719 });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved location from localStorage on mount
+  useEffect(() => {
+    const savedLocation = localStorage.getItem('selectedLocation');
+    if (savedLocation) {
+      setLocation(savedLocation);
+    }
+    
+    // Listen for location updates
+    const handleLocationUpdate = () => {
+      const newLocation = localStorage.getItem('selectedLocation');
+      if (newLocation) setLocation(newLocation);
+    };
+    
+    window.addEventListener('storage', handleLocationUpdate);
+    window.addEventListener('locationUpdated', handleLocationUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleLocationUpdate);
+      window.removeEventListener('locationUpdated', handleLocationUpdate);
+    };
+  }, []);
+
+  // Get current GPS location
+  async function getCurrentLocation() {
+    if (!navigator.geolocation) {
+      setSubmitError('Geolocation is not supported by your browser.');
+      return;
+    }
+    
+    // Check current permission state
+    if (navigator.permissions) {
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('Geolocation permission status:', permissionStatus.state);
+        // 'granted' = allowed, 'denied' = blocked, 'prompt' = will ask
+      } catch (e) {
+        console.log('Permission API not supported');
+      }
+    }
+    
+    setIsGettingLocation(true);
+    setSubmitError(null);
+    console.log('Requesting geolocation...');
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocationCoords({ lat: latitude, lng: longitude });
+        
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+            { headers: { 'User-Agent': 'Zentrais-Marketplace/1.0' } }
+          );
+          const data = await response.json();
+          
+          if (data?.address) {
+            const parts = [
+              data.address.city || data.address.town || data.address.village,
+              data.address.state || data.address.region,
+              data.address.country,
+            ].filter(Boolean);
+            
+            const address = parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            setLocation(address);
+            localStorage.setItem('selectedLocation', address);
+          }
+        } catch (error) {
+          console.error('Error getting address:', error);
+          setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+        } finally {
+          setIsGettingLocation(false);
+        }
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        console.log('Geolocation error:', error.code, error.message);
+        if (error.code === 1) {
+          setSubmitError('Location permission denied. Please enable in browser settings.');
+        } else if (error.code === 2) {
+          setSubmitError('Location unavailable. GPS may be disabled on your device.');
+        } else if (error.code === 3) {
+          setSubmitError('Location request timed out. Please try again.');
+        } else {
+          setSubmitError('Unable to get your location.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 }
+    );
+  }
 
   const addCategory = () => {
     if (formData.category.trim() && categories.length < 3 && !categories.includes(formData.category.trim())) {
@@ -41,9 +134,24 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
   const handleSubmit = async () => {
     setSubmitError(null);
     
-    // Validate form
+    // Validate required fields
     if (!formData.title.trim()) {
-      setSubmitError('Please enter a title');
+      setSubmitError('Please enter a product title');
+      return;
+    }
+    
+    if (!formData.description.trim()) {
+      setSubmitError('Please enter a product description');
+      return;
+    }
+    
+    if (!formData.price.trim() || parseFloat(formData.price) <= 0) {
+      setSubmitError('Please enter a valid price');
+      return;
+    }
+    
+    if (!location.trim()) {
+      setSubmitError('Please set a location (use GPS or enter manually)');
       return;
     }
     
@@ -52,13 +160,14 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
       return;
     }
 
-    // Create listing via API
+    // Create listing via API with images
     const listing = await createNewListing({
       title: formData.title.trim(),
-      description: formData.description.trim() || undefined,
-      price: formData.price ? parseFloat(formData.price) : undefined,
+      description: formData.description.trim(),
+      price: parseFloat(formData.price),
       category: categories.length > 0 ? categories.join(', ') : undefined,
       location_name: location,
+      images: uploadedImages.length > 0 ? uploadedImages : undefined,
     });
 
     if (listing) {
@@ -67,20 +176,50 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Compress image to reduce size
+  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        
+        // Scale down if larger than maxWidth
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Convert to compressed JPEG
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
+    for (const file of Array.from(files)) {
       if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          setUploadedImages((prev) => [...prev, result]);
-        };
-        reader.readAsDataURL(file);
+        try {
+          const compressed = await compressImage(file);
+          setUploadedImages((prev) => [...prev, compressed]);
+        } catch (err) {
+          console.error('Error compressing image:', err);
+        }
       }
-    });
+    }
   };
 
   const removeImage = (index: number) => {
@@ -192,35 +331,78 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
           <h2 className="text-[16px] font-semibold text-slate-800 mb-4">Location</h2>
           
           <div className="space-y-4">
-            <div className="relative h-40 overflow-hidden rounded-lg bg-slate-200">
-              <div className="flex h-full items-center justify-center text-slate-500">
-                <div className="text-center">
-                  <MapPin className="mx-auto h-8 w-8 mb-2" />
-                  <p className="text-[13px]">Map View ({mapView})</p>
-                </div>
+            {/* Map View */}
+            <div className="relative h-40 overflow-hidden rounded-lg border border-slate-300">
+              <iframe
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${locationCoords.lng - 0.05},${locationCoords.lat - 0.025},${locationCoords.lng + 0.05},${locationCoords.lat + 0.025}&marker=${locationCoords.lat},${locationCoords.lng}&zoom=${mapZoom}`}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                className="pointer-events-none"
+                title="Location Map"
+              />
+              {/* Zoom Controls */}
+              <div className="absolute top-2 right-2 flex flex-col bg-white rounded shadow-lg overflow-hidden border border-slate-200">
+                <button type="button" onClick={() => setMapZoom(prev => Math.min(prev + 1, 18))}
+                  className="px-2 py-1 text-slate-700 hover:bg-slate-100 text-sm font-medium border-b border-slate-200">+</button>
+                <button type="button" onClick={() => setMapZoom(prev => Math.max(prev - 1, 5))}
+                  className="px-2 py-1 text-slate-700 hover:bg-slate-100 text-sm font-medium">−</button>
               </div>
             </div>
             
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <p className="text-[14px] font-medium text-slate-700">Current Location (GPS)</p>
-                <p className="text-[13px] text-slate-500">{location}</p>
+                <p className="text-[13px] text-slate-500">{location || 'Not set'}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setUseGPS(!useGPS)}
-                className={cn(
-                  'relative h-6 w-11 rounded-full transition',
-                  useGPS ? 'bg-[#B56A1E]' : 'bg-slate-300'
-                )}
-              >
-                <div
-                  className={cn(
-                    'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
-                    useGPS ? 'translate-x-5' : 'translate-x-0.5'
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={getCurrentLocation}
+                  disabled={isGettingLocation}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#B56A1E] text-white text-[12px] font-medium disabled:opacity-50"
+                >
+                  {isGettingLocation ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" />Locating...</>
+                  ) : (
+                    <><MapPin className="h-3 w-3" />Get Location</>
                   )}
-                />
-              </button>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseGPS(!useGPS)}
+                  className={cn(
+                    'relative h-6 w-11 rounded-full transition',
+                    useGPS ? 'bg-[#B56A1E]' : 'bg-slate-300'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
+                      useGPS ? 'translate-x-5' : 'translate-x-0.5'
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+            
+            {/* Manual location entry */}
+            <div className="mt-3">
+              <label className="text-[13px] text-slate-600 mb-1 block">Or enter location manually:</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  if (e.target.value.trim()) {
+                    localStorage.setItem('selectedLocation', e.target.value.trim());
+                  }
+                }}
+                placeholder="City, State, Country"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-[14px] text-slate-800 placeholder:text-slate-500 focus:border-[#B56A1E] focus:outline-none"
+              />
             </div>
           </div>
         </div>

@@ -1,16 +1,37 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import { BottomNav } from '@/components/app/BottomNav';
-import { Camera, ChevronLeft, Filter, Heart, MapPin, Plus, Search, Send, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, Filter, Heart, Loader2, MapPin, Plus, Search, Send, Sparkles, X } from 'lucide-react';
 import { AIChatScreen, ChatHistorySidebar, ListingCard, FilterModal, LocationScreen, MessagingScreen,ProductDetailScreen, SearchResultCard, SellItemScreen } from './components';
 import { cn, formatPrice, parseTimeAgoToMinutes } from './utils';
 import { Listing, AIChatMessage, ChatHistory, SortBy, FilterDraft, ChatMessage } from './types';
 import { DEFAULT_FILTERS } from './constants';
-import { SAMPLE_LISTINGS } from './data/listings';
-import { useAIChat, useExchangeFilters } from './hooks';
+import { useAIChat, useExchangeFilters, useExchangeAPI } from './hooks';
+import { getStoredUserId } from '@/lib/auth';
+
+// Helper function to convert ISO date to relative time
+function getTimeAgo(dateString: string): string {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
 
 export default function ExchangePage() {
+  // Fetch listings from API
+  const { listings: apiListings, loading, error, fetchFeed } = useExchangeAPI();
+  
   // Search query state
   const [query, setQuery] = useState('');
   
@@ -18,6 +39,21 @@ export default function ExchangePage() {
   const { aiMessages, aiInputText, setAiInputText, sendAIMessage } = useAIChat();
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
+
+  // Convert API listings to frontend Listing type
+  const listings: Listing[] = useMemo(() => {
+    return apiListings.map((item) => ({
+      id: item.listing_id,
+      title: item.title,
+      subtitle: item.category || 'Item',
+      price: item.price || 0,
+      timeAgo: getTimeAgo(item.created_at),
+      imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder-product.png',
+      description: item.description,
+      categories: item.category ? [item.category] : [],
+      sellerName: 'Seller',
+    }));
+  }, [apiListings]);
   
   // Filter functionality managed by custom hook
   const {
@@ -29,18 +65,8 @@ export default function ExchangePage() {
     filteredListings,
     applyDraftFilters,
     clearAllFilters
-  } = useExchangeFilters(SAMPLE_LISTINGS, query);
-  const [chatHistories] = useState<ChatHistory[]>([
-    { id: '1', title: 'Chat Title', lastMessage: 'Looking for antique tables...', timestamp: 'today' },
-    { id: '2', title: 'Chat Title', lastMessage: 'Camera equipment search', timestamp: 'today' },
-    { id: '3', title: 'Chat Title', lastMessage: 'Furniture recommendations', timestamp: 'today' },
-    { id: '4', title: 'Chat Title', lastMessage: 'Electronics deals', timestamp: 'yesterday' },
-    { id: '5', title: 'Chat Title', lastMessage: 'Vintage items query', timestamp: 'yesterday' },
-    { id: '6', title: 'Chat Title', lastMessage: 'Pricing advice needed', timestamp: 'yesterday' },
-    { id: '7', title: 'Chat Title', lastMessage: 'Local marketplace tips', timestamp: 'lastweek' },
-    { id: '8', title: 'Chat Title', lastMessage: 'Negotiation strategies', timestamp: 'lastweek' },
-    { id: '9', title: 'Chat Title', lastMessage: 'Best selling practices', timestamp: 'lastweek' },
-  ]);
+  } = useExchangeFilters(listings, query);
+  const [chatHistories] = useState<ChatHistory[]>([]);
 
   // All existing state hooks
   const [mode, setMode] = useState<'grid' | 'search' | 'messaging' | 'sell' | 'detail' | 'location'>('grid');
@@ -62,8 +88,13 @@ export default function ExchangePage() {
     images: [] as string[]
   });
 
+  // Fetch listings on mount
+  useEffect(() => {
+    fetchFeed();
+  }, [fetchFeed]);
+
   const openDetail = (id: string) => {
-    setSelected(SAMPLE_LISTINGS.find((l) => l.id === id) ?? null);
+    setSelected(listings.find((l) => l.id === id) ?? null);
     setMode('detail');
   };
 
@@ -72,7 +103,26 @@ export default function ExchangePage() {
   };
 
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState('Alberta');
+  const [selectedLocation, setSelectedLocation] = useState('');
+
+  // Load location from localStorage
+  useEffect(() => {
+    const loadLocation = () => {
+      const saved = localStorage.getItem('selectedLocation');
+      if (saved) setSelectedLocation(saved);
+    };
+    
+    loadLocation();
+    window.addEventListener('storage', loadLocation);
+    window.addEventListener('focus', loadLocation);
+    window.addEventListener('locationUpdated', loadLocation);
+    
+    return () => {
+      window.removeEventListener('storage', loadLocation);
+      window.removeEventListener('focus', loadLocation);
+      window.removeEventListener('locationUpdated', loadLocation);
+    };
+  }, []);
 
   const toggleLike = (id: string) => {
     setLikedIds((prev) => {
@@ -104,6 +154,7 @@ export default function ExchangePage() {
     return (
       <SellItemScreen
         onBack={() => setMode('grid')}
+        onSuccess={() => fetchFeed()}
       />
     );
   }
@@ -159,17 +210,24 @@ export default function ExchangePage() {
         {mode === 'grid' ? (
           <>
             <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 pt-3 sm:max-w-full">
-              <button type="button" aria-label="Profile" className="h-10 w-10 overflow-hidden rounded-full ring-1 ring-black/10">
-                <img
-                  alt="Profile"
-                  className="h-full w-full object-cover"
-                  src="https://images.unsplash.com/photo-1502685104226-ee32379fefbe?auto=format&fit=crop&w=300&q=60"
-                />
-              </button>
+              {/* Profile Image - links to profile */}
+              <a href="/profile" className="h-10 w-10 overflow-hidden rounded-full ring-1 ring-black/10 bg-gray-100 flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </a>
 
-              <div className="grid h-10 w-10 place-items-center rounded-full">
-                <span className="text-xl font-extrabold text-[#B56A1E]">o</span>
-              </div>
+              {/* Zentrais Logo - center */}
+              <a href="/exchange" className="grid h-10 w-10 place-items-center">
+                <Image
+                  src="/zentrais_log_marketplace.png"
+                  alt="Zentrais Exchange"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  priority
+                />
+              </a>
 
               <div className="flex items-center gap-2">
                 <button
@@ -204,7 +262,7 @@ export default function ExchangePage() {
                     className="flex items-center gap-1 hover:text-[#B56A1E] active:scale-95 transition"
                   >
                     <MapPin className="h-4 w-4 text-[#B56A1E]" />
-                    <span>{selectedLocation}</span>
+                    <span>{selectedLocation || 'Set location'}</span>
                   </button>
                 </div>
               </div>
@@ -222,17 +280,22 @@ export default function ExchangePage() {
                 <ChevronLeft className="h-5 w-5 text-[#B56A1E]" />
               </button>
 
-              <div className="grid h-10 w-10 place-items-center rounded-full">
-                <span className="text-xl font-extrabold text-[#B56A1E]">o</span>
-              </div>
-
-              <button type="button" aria-label="Profile" className="h-10 w-10 overflow-hidden rounded-full ring-1 ring-black/10">
-                <img
-                  alt="Profile"
-                  className="h-full w-full object-cover"
-                  src="https://images.unsplash.com/photo-1502685104226-ee32379fefbe?auto=format&fit=crop&w=300&q=60"
+              <a href="/exchange" className="grid h-10 w-10 place-items-center">
+                <Image
+                  src="/zentrais_log_marketplace.png"
+                  alt="Zentrais Exchange"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  priority
                 />
-              </button>
+              </a>
+
+              <a href="/profile" className="h-10 w-10 overflow-hidden rounded-full ring-1 ring-black/10 bg-gray-100 flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </a>
             </div>
 
             <div className="mx-auto w-full max-w-md px-4 pb-3 pt-3 sm:max-w-full">
@@ -274,12 +337,34 @@ export default function ExchangePage() {
 
       <main className={cn('mx-auto w-full max-w-md px-4', 'pb-[calc(96px+env(safe-area-inset-bottom))]', 'sm:max-w-full')}>
         {mode === 'grid' ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:mx-5 sm:grid-cols-3 lg:grid-cols-4">
-            {SAMPLE_LISTINGS.map((item) => (
-              <ListingCard item={item} key={item.id} isLiked={likedIds.has(item.id)} onLikeToggle={() => toggleLike(item.id)} onOpen={() => openDetail(item.id)}
-              />
-            ))}
-          </div>
+          loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+              <Loader2 className="h-8 w-8 animate-spin mb-3" />
+              <p>Loading listings...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-red-500">
+              <p className="mb-3">Failed to load listings</p>
+              <button
+                onClick={() => fetchFeed()}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+              >
+                Retry
+              </button>
+            </div>
+          ) : listings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+              <p className="mb-2">No listings yet</p>
+              <p className="text-sm">Be the first to list something!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:mx-5 sm:grid-cols-3 lg:grid-cols-4">
+              {listings.map((item) => (
+                <ListingCard item={item} key={item.id} liked={likedIds.has(item.id)} onToggleLike={() => toggleLike(item.id)} onOpen={() => openDetail(item.id)}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredListings.map((item) => (

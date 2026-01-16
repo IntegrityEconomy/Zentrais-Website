@@ -22,8 +22,11 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      // Extract error message from various possible response formats
+      const errorMessage = data.message || data.error || data.statusMessage || 'Invalid email or password';
+      console.error('Login failed:', { status: response.status, error: errorMessage, data });
       return NextResponse.json(
-        { message: data.message || 'Invalid email or password' },
+        { message: errorMessage },
         { status: response.status }
       );
     }
@@ -37,10 +40,20 @@ export async function POST(request: NextRequest) {
       rememberMe,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Login error:', errorMessage, error);
+    
+    // Check if it's a connection error
+    if (errorMessage.includes('fetch') || errorMessage.includes('ECONNREFUSED') || errorMessage.includes('network')) {
+      return NextResponse.json(
+        { message: 'Unable to connect to authentication service. Please ensure the backend is running.' },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
-      { message: 'Unable to connect to authentication service' },
-      { status: 503 }
+      { message: `Login failed: ${errorMessage}` },
+      { status: 500 }
     );
   }
 }

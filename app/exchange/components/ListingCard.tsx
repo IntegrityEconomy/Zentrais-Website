@@ -11,7 +11,13 @@ interface ListingCardProps {
 
 export function ListingCard({ item, liked, onToggleLike, onOpen }: ListingCardProps) {
   return (
-    <button type="button" onClick={onOpen} className="w-full text-left">
+    <div 
+      role="button" 
+      tabIndex={0} 
+      onClick={onOpen} 
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      className="w-full text-left cursor-pointer"
+    >
       <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div className="relative aspect-[4/3] w-full">
           <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
@@ -48,6 +54,6 @@ export function ListingCard({ item, liked, onToggleLike, onOpen }: ListingCardPr
         <p className="truncate text-[13px] font-medium text-slate-700">{item.title}</p>
         <p className="shrink-0 text-[12px] text-slate-500">{item.timeAgo}</p>
       </div>
-    </button>
+    </div>
   );
 }
