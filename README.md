@@ -4,7 +4,7 @@ This folder is extended from the Dinal/debate repo
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 
-## Databases
+## Databases (I have not tested this step works.)
 This repo runs two backends that each use PostgreSQL:
 
 - **Dialogue backend** ([backend/dialogue](backend/dialogue)) uses **Prisma**.
