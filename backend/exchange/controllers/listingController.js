@@ -389,13 +389,3 @@ exports.getSavedListings = async (req, res, next) => {
         next(err);
     }
 };
-
-// DELETE /listings - Delete all listings (for development/testing)
-exports.deleteAllListings = async (req, res, next) => {
-    try {
-        const count = await Listing.destroy({ where: {}, truncate: true });
-        res.json({ message: 'All listings deleted', count });
-    } catch (err) {
-        next(err);
-    }
-};

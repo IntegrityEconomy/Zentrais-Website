@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "dist/main.js",
   "scripts": {
+    "dev": "npm run start:dev",
     "start:dev": "nest start --watch",
     "build": "nest build",
     "prisma:generate": "prisma generate",

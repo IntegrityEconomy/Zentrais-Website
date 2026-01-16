@@ -9,7 +9,6 @@ const {
     createListing,
     updateListing,
     deleteListing,
-    deleteAllListings,
     saveListing,
     unsaveListing,
     getSavedListings,
@@ -25,7 +24,6 @@ router.get('/listings/:id', getListingById); // Public: anyone can view
 router.post('/listings', requireAuth, createListing);
 router.put('/listings/:id', requireAuth, updateListing);
 router.delete('/listings/:id', requireAuth, deleteListing);
-router.delete('/listings', deleteAllListings); // Dev only: delete all listings
 
 // Saved listings routes (auth + ownership required)
 router.get('/users/:userId/saved-listings', requireAuth, requireSelf, getSavedListings);

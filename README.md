@@ -9,9 +9,73 @@ Please add .env file in the root directoy as follow
 ```plain
 # NEXT_PUBLIC_ is for client.
 # Server-side can use either.
-DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
-NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
+# Local dev defaults (recommended)
+DIALOGUE_BACKEND_URL=http://localhost:3001
+NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://localhost:3001
+
+EXCHANGE_BACKEND_URL=http://localhost:3002
+NEXT_PUBLIC_EXCHANGE_BACKEND_URL=http://localhost:3002
+
+# Production / remote examples (optional)
+# DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
+# NEXT_PUBLIC_DIALOGUE_BACKEND_URL=http://sg-chat-alb-2067960470.us-east-1.elb.amazonaws.com
 ```
+
+## Full-stack local development (Frontend + Dialogue + Exchange)
+
+Run these in 3 separate terminals.
+
+### 1) Frontend (Next.js)
+
+From the repo root:
+
+```bash
+npm install
+npm run dev
+```
+
+App: http://localhost:3000
+
+### 2) Dialogue backend (NestJS)
+
+From `backend/dialogue`:
+
+```bash
+npm install
+npm run dev
+```
+
+API: http://localhost:3001
+
+### 3) Exchange backend (Express)
+
+From `backend/exchange`:
+
+```bash
+npm install
+```
+
+Create `backend/exchange/.env` from the example and ensure `JWT_SECRET` matches the Dialogue backend.
+
+- macOS/Linux:
+
+```bash
+cp env.example .env
+```
+
+- Windows (PowerShell):
+
+```powershell
+Copy-Item env.example .env
+```
+
+Then start the server:
+
+```bash
+npm run dev
+```
+
+API: http://localhost:3002
 
 ## Getting Started
 
