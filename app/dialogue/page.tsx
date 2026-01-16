@@ -61,6 +61,30 @@ export default function DialoguePage() {
   // Socket.IO connection
   const socketRef = useRef<Socket | null>(null);
   const currentUserId = getStoredUserId();
+  const usernameCacheRef = useRef<Map<string, string>>(new Map());
+
+  const resolveUsername = useCallback(async (userId: string) => {
+    if (!userId) return;
+    if (userId === currentUserId) return;
+    if (usernameCacheRef.current.has(userId)) return;
+
+    try {
+      const response = await fetch(`${DIALOGUE_BACKEND_URL}/messages/user/verify/${userId}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const username = (data?.username as string | undefined) || userId;
+
+      usernameCacheRef.current.set(userId, username);
+
+      // Update any existing conversations/messages that were temporarily showing the raw userId
+      setConversations((prev) => prev.map((c) => (c.id === userId ? { ...c, name: username } : c)));
+      setMessages((prev) =>
+        prev.map((m) => (m.sender === 'other' && m.senderName === userId ? { ...m, senderName: username } : m))
+      );
+    } catch (error) {
+      console.error('Error resolving username:', error);
+    }
+  }, [currentUserId]);
 
   // Helper to get auth headers
   const getAuthHeaders = useCallback(() => {
@@ -277,11 +301,14 @@ export default function DialoguePage() {
 
     socket.on('receive_message', (message) => {
       console.log('Received message:', message);
+      const otherUserId = message.sender_id === currentUserId ? message.receiver_id : message.sender_id;
+      const otherUserName = usernameCacheRef.current.get(otherUserId) || otherUserId;
+
       const newMessage: Message = {
         id: message.id,
         text: message.content || '',
         sender: message.sender_id === currentUserId ? 'user' : 'other',
-        senderName: message.sender_id === currentUserId ? 'You' : message.sender_id,
+        senderName: message.sender_id === currentUserId ? 'You' : otherUserName,
         timestamp: message.created_at || new Date().toISOString(),
         type: message.type || 'TEXT',
         mediaUrl: message.media_url,
@@ -295,7 +322,6 @@ export default function DialoguePage() {
 
       // Update conversation list with last message
       setConversations((prev) => {
-        const otherUserId = message.sender_id === currentUserId ? message.receiver_id : message.sender_id;
         const existing = prev.find(c => c.id === otherUserId);
         const lastMessageText = message.type === 'IMAGE' ? '📷 Image' : message.type === 'AUDIO' ? '🎤 Voice message' : (message.content || '');
         if (existing) {
@@ -308,7 +334,7 @@ export default function DialoguePage() {
           // New conversation from incoming message
           return [{
             id: otherUserId,
-            name: otherUserId,
+            name: otherUserName,
             lastMessage: lastMessageText,
             timestamp: message.created_at || new Date().toISOString(),
             unread: 1,
@@ -316,6 +342,9 @@ export default function DialoguePage() {
           }, ...prev];
         }
       });
+
+      // If we don't yet know the username, resolve it in the background and patch UI
+      void resolveUsername(otherUserId);
     });
 
     socket.on('disconnect', () => {
