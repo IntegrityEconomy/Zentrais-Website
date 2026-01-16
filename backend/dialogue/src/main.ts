@@ -13,7 +13,7 @@ async function bootstrap() {
   // console.log(`Chat Engine running on port ${port}`);
   
   app.enableCors();
-  const port = process.env.PORT || 3000; 
+  const port = process.env.PORT || 3001;  // Default to 3001 to avoid conflict with Next.js
   await app.listen(port, '0.0.0.0');
   console.log(`Chat Engine running on http://localhost:${port}`);
 }
