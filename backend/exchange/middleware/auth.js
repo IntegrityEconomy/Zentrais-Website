@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const prisma = require('../config/prisma');
 
 /**
  * Unified JWT Auth Middleware
@@ -23,7 +23,7 @@ async function requireAuth(req, res, next) {
     }
     
     // Check if user account exists and is active
-    const user = await User.findByPk(userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       // User might exist in Dialogue DB but not in Exchange DB
       // Allow the request but mark as external user

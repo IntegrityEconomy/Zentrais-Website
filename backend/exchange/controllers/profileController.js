@@ -1,17 +1,26 @@
-const Profile = require('../models/Profile');
-const User = require('../models/User');
+const prisma = require('../config/prisma');
 
 // Private: current user's profile
 exports.getMyProfile = async (req, res, next) => {
   try {
-    const profile = await Profile.findOne({
+    const profile = await prisma.profile.findUnique({
       where: { user_id: req.user.user_id },
       include: {
-        model: User,
-        attributes: ['user_id', 'username'],
+        user: {
+          select: { id: true, username: true },
+        },
       },
     });
-    res.json(profile);
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    res.json({
+      ...profile,
+      profile_id: profile.id,
+      User: profile.user ? { user_id: profile.user.id, username: profile.user.username } : null,
+    });
   } catch (err) {
     next(err);
   }
@@ -22,23 +31,25 @@ exports.updateMyProfile = async (req, res, next) => {
   try {
     const { display_name, bio, avatar_url, location_city, location_country, location_lat, location_lng } = req.body;
 
-    const profile = await Profile.findOne({ where: { user_id: req.user.user_id } });
+    const profile = await prisma.profile.findUnique({ where: { user_id: req.user.user_id } });
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
-    Object.assign(profile, {
-      display_name: display_name ?? profile.display_name,
-      bio: bio ?? profile.bio,
-      avatar_url: avatar_url ?? profile.avatar_url,
-      location_city: location_city ?? profile.location_city,
-      location_country: location_country ?? profile.location_country,
-      location_lat: location_lat ?? profile.location_lat,
-      location_lng: location_lng ?? profile.location_lng,
+    const updated = await prisma.profile.update({
+      where: { user_id: req.user.user_id },
+      data: {
+        display_name: display_name ?? profile.display_name,
+        bio: bio ?? profile.bio,
+        avatar_url: avatar_url ?? profile.avatar_url,
+        location_city: location_city ?? profile.location_city,
+        location_country: location_country ?? profile.location_country,
+        location_lat: location_lat ?? profile.location_lat,
+        location_lng: location_lng ?? profile.location_lng,
+      },
     });
 
-    await profile.save();
-    res.json(profile);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -47,18 +58,27 @@ exports.updateMyProfile = async (req, res, next) => {
 // Public profile view by user id (limited fields)
 exports.getPublicProfile = async (req, res, next) => {
   try {
-    const profile = await Profile.findOne({
+    const profile = await prisma.profile.findUnique({
       where: { user_id: req.params.userId },
-      attributes: ['display_name', 'avatar_url', 'location_city', 'location_country'],
-      include: {
-        model: User,
-        attributes: ['user_id', 'username'],
+      select: {
+        display_name: true,
+        avatar_url: true,
+        location_city: true,
+        location_country: true,
+        user: {
+          select: { id: true, username: true },
+        },
       },
     });
+    
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
     }
-    res.json(profile);
+    
+    res.json({
+      ...profile,
+      User: profile.user ? { user_id: profile.user.id, username: profile.user.username } : null,
+    });
   } catch (err) {
     next(err);
   }

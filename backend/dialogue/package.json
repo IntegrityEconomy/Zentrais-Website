@@ -2,14 +2,18 @@
   "name": "chat-engine",
   "version": "1.0.0",
   "main": "dist/main.js",
+  "prisma": {
+    "schema": "../prisma/schema.prisma"
+  },
   "scripts": {
     "dev": "npm run start:dev",
     "start:dev": "nest start --watch",
     "build": "nest build",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "ts-node prisma/seed.ts"
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",
