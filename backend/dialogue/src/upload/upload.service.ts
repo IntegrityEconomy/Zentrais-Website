@@ -1,21 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { S3Client, PutObjectCommand,GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as dayjs from 'dayjs';
 
-
-
 @Injectable()
 export class UploadService {
-  // SDK will automatically use credentials & default region from AWS Toolkit
-  private s3 = new S3Client({
-    region: process.env.AWS_REGION,
-    // credentials: {
-    //   accessKeyId: process.env.AWS_ACCESS_KEY,
-    //   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    // },
-  });
+  private s3: S3Client;
+
+  constructor() {
+    // If AWS_ACCESS_KEY_ID is set (local dev), use explicit credentials
+    // Otherwise, SDK will use IAM role (AWS ECS/EC2/Lambda)
+    const config: any = {
+      region: process.env.AWS_REGION || 'us-east-1',
+    };
+
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+      config.credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      };
+    }
+
+    this.s3 = new S3Client(config);
+  }
 
   async uploadFile(file: Express.Multer.File, senderId: string, receiverId: string, type: 'IMAGE' | 'AUDIO') {
     //const key = `uploads /${crypto.randomUUID ()}-${file.originalname}`;

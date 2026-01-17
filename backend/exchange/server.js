@@ -4,12 +4,16 @@ const dotenv = require('dotenv');
 const prisma = require('./config/prisma');
 const logger = require('./middleware/logging');
 const errorHandler = require('./middleware/errorHandler');
-const { authRateLimiter } = require('./middleware/rateLimit');
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+
+// Upload routes
+app.use('/upload', require('./routes/upload'));
+
+// JSON body parser
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(logger);
@@ -24,8 +28,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Auth & user-related routes
-app.use('/auth', authRateLimiter, require('./routes/auth'));
+// User-related routes
 app.use('/profiles', require('./routes/profiles'));
 
 app.use("/api", require("./routes/search.routes"));

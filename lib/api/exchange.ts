@@ -264,3 +264,110 @@ export async function unsaveListing(listingId: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// ============= Image Upload APIs =============
+
+export interface UploadResult {
+  url: string;
+  key: string;
+}
+
+/**
+ * Upload a listing image to S3 (requires auth)
+ * @param file - The image file to upload
+ * @param listingId - Optional listing ID (use 'new' for new listings)
+ * @returns Upload result with S3 URL and key
+ */
+export async function uploadListingImage(
+  file: File,
+  listingId: string = 'new'
+): Promise<UploadResult> {
+  if (!isAuthenticated()) {
+    throw new ExchangeApiError(401, 'Authentication required');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getStoredToken();
+  const response = await fetch(`${EXCHANGE_BACKEND_URL}/upload/listing/${listingId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new ExchangeApiError(response.status, errorData.error || 'Upload failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * Upload multiple listing images to S3 (requires auth)
+ * @param files - Array of image files to upload
+ * @param listingId - Optional listing ID (use 'new' for new listings)
+ * @returns Array of upload results
+ */
+export async function uploadListingImages(
+  files: File[],
+  listingId: string = 'new'
+): Promise<UploadResult[]> {
+  if (!isAuthenticated()) {
+    throw new ExchangeApiError(401, 'Authentication required');
+  }
+
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+  formData.append('listingId', listingId);
+
+  const token = getStoredToken();
+  const response = await fetch(`${EXCHANGE_BACKEND_URL}/upload/listings`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new ExchangeApiError(response.status, errorData.error || 'Upload failed');
+  }
+
+  const data = await response.json();
+  return data.uploads;
+}
+
+/**
+ * Upload a profile avatar to S3 (requires auth)
+ * @param file - The image file to upload
+ * @returns Upload result with S3 URL and key
+ */
+export async function uploadAvatar(file: File): Promise<UploadResult> {
+  if (!isAuthenticated()) {
+    throw new ExchangeApiError(401, 'Authentication required');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getStoredToken();
+  const response = await fetch(`${EXCHANGE_BACKEND_URL}/upload/avatar`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new ExchangeApiError(response.status, errorData.error || 'Upload failed');
+  }
+
+  return response.json();
+}

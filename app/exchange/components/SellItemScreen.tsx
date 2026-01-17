@@ -3,6 +3,7 @@ import { X, MapPin, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
 import { useExchangeAPI } from '../hooks/useExchangeAPI';
 import { isAuthenticated } from '@/lib/auth';
+import { uploadListingImage } from '@/lib/api/exchange';
 
 interface SellItemScreenProps {
   onBack: () => void;
@@ -26,6 +27,7 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number }>({ lat: 51.0447, lng: -114.0719 });
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,49 +178,35 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
     }
   };
 
-  // Compress image to reduce size
-  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-        
-        // Scale down if larger than maxWidth
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        // Convert to compressed JPEG
-        const compressed = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressed);
-      };
-      
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
+    if (!isAuthenticated()) {
+      setSubmitError('Please log in to upload images');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setSubmitError(null);
+
     for (const file of Array.from(files)) {
       if (file.type.startsWith('image/')) {
         try {
-          const compressed = await compressImage(file);
-          setUploadedImages((prev) => [...prev, compressed]);
+          // Upload to S3 via backend
+          const result = await uploadListingImage(file);
+          setUploadedImages((prev) => [...prev, result.url]);
         } catch (err) {
-          console.error('Error compressing image:', err);
+          console.error('Error uploading image:', err);
+          setSubmitError(err instanceof Error ? err.message : 'Failed to upload image');
         }
       }
+    }
+
+    setIsUploadingImage(false);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -426,11 +414,21 @@ export function SellItemScreen({ onBack, onSuccess }: SellItemScreenProps) {
             <button
               type="button"
               onClick={triggerImageUpload}
-              className="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50 transition"
+              disabled={isUploadingImage}
+              className="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="text-center">
-                <Plus className="mx-auto h-8 w-8 text-slate-400 mb-2" />
-                <p className="text-[13px] text-slate-500">Add Photos</p>
+                {isUploadingImage ? (
+                  <>
+                    <Loader2 className="mx-auto h-8 w-8 text-slate-400 mb-2 animate-spin" />
+                    <p className="text-[13px] text-slate-500">Uploading...</p>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mx-auto h-8 w-8 text-slate-400 mb-2" />
+                    <p className="text-[13px] text-slate-500">Add Photos</p>
+                  </>
+                )}
               </div>
             </button>
             
